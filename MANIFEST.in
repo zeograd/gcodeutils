@@ -1,0 +1,6 @@
+include README.rst
+
+# Include the test suite (FIXME: does not work yet)
+# recursive-include tests *
+
+include models/temperature/*

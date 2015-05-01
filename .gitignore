@@ -1,0 +1,4 @@
+.idea/
+dist/
+gcodeutils.egg-info/
+*.pyc
