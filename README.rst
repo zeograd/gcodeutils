@@ -6,6 +6,19 @@ It is targetting RepRap oriented GCode but isn't limited to RepRap.
 
 Currently, it is composed of one calibration generation program.
 
+Installation
+------------
+
+GCodeUtils is installable from PyPI with a single pip command::
+
+    pip install gcodeutils
+
+Alternatively, GCodeUtils can be run directly from sources after a git pull::
+
+    git clone https://github.com/zeograd/gcodeutils.git
+    cd gcodeutils && python setup.py install
+
+
 gcode_tempcal
 -------------
 
@@ -22,6 +35,7 @@ Rationale
 
 Finding out what is the ideal temperature to print with a new spool of filament can
 be achieved using the technique described on this video : https://www.youtube.com/watch?v=FSOPsRiiOZk
+
 Basically, you create a tower that you'll slice to print only the outer shell.
 
 Then you update manually the gcode program to insert temperature decrase as you print and
