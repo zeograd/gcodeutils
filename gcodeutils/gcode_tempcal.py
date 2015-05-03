@@ -143,20 +143,39 @@ class GCodeStepTempGradient(GCodeTempGradient):
 def main():
     """command line entry point"""
     parser = argparse.ArgumentParser(description='Add temperature gradient to gcode program')
-    parser.add_argument('start_temp', type=int)
-    parser.add_argument('end_temp', type=int)
-    parser.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin)
-    parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'), default=sys.stdout)
+    parser.add_argument('start_temp', type=int,
+                        help='Initial temperature (best set to the default slicing temperature).'
+                             ' For instance, for ABS you may want 240 and 200 for PLA.')
+    parser.add_argument('end_temp', type=int,
+                        help='End temperature for the gcode program. Usually lower than the initial temperature. '
+                             'Make sure that your material can be still be extruded at this temperature '
+                             'to avoid clogging your extruder.')
+    parser.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin,
+                        help='Program filename to be modified. Defaults to standard input.')
+    parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'), default=sys.stdout,
+                        help='Modified program with temperature gradient. Defaults to standard output.')
 
-    parser.add_argument('--min_z_change', type=float, default=0.1)
+    parser.add_argument('--min_z_change', '-z', type=float, default=0.1,
+                        help='Minimum height above which temperature gradient is created. '
+                             'If you have a special start sequence playing with temperatures, you may want to raise '
+                             'this to avoid overlapping of temperature. Defaults to %(default)smm which is compatible '
+                             'with NopHead ooze free unattended start sequence.')
 
     temperature_control = parser.add_argument_group('temperature control')
     temperature_control.add_argument('--continuous', '-c', action='store_const', const=GCodeContinuousTempGradient,
-                                     dest='gcode_grad_class', default=GCodeStepTempGradient)
-    temperature_control.add_argument('--steps', '-s', default=10)
+                                     dest='gcode_grad_class', default=GCodeStepTempGradient,
+                                     help='Switch to a continuous gradient generation where temperature is recomputed '
+                                          'for every layer. You may want this in the case of very precise and fast '
+                                          'hotend. Defaults to discrete temperature gradient divided in X steps.')
+    temperature_control.add_argument('--steps', '-s', default=10,
+                                     help='Number of steps used to create a discrete gradient when using the default '
+                                          'gradient generation model. Defaults to %(default)s steps. This setting is '
+                                          'not used when using the continuous gradient generation model.')
 
-    parser.add_argument('--verbose', '-v', action='count', default=1)
-    parser.add_argument('--quiet', '-q', action='count', default=0)
+    parser.add_argument('--verbose', '-v', action='count', default=1,
+                        help='Verbose mode. It notably outputs the mapping between temperature and height if you have '
+                             'troubles figuring it out.')
+    parser.add_argument('--quiet', '-q', action='count', default=0, help='Quiet mode')
 
     args = parser.parse_args()
 
