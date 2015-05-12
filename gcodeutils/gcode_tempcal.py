@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
-"""Add temperature gradient to gcode program to create unattended temprature calibration program"""
+"""Add temperature gradient to gcode program to create unattended temperature calibration program"""
 from __future__ import print_function
 from __future__ import division
 
@@ -19,7 +19,7 @@ class GCodeTempGradient(object):  # pylint: disable=too-many-instance-attributes
     ABSOLUTE_MIN_TEMPERATURE = 150
     ABSOLUTE_MAX_TEMPERATURE = 250
 
-    def __init__(self, gcode, start_temp, end_temp, min_z_change, **kwargs):
+    def __init__(self, gcode, start_temp, end_temp, min_z_change):
         self.gcode = gcode
         self.start_temp = start_temp
         self.end_temp = end_temp
@@ -30,7 +30,6 @@ class GCodeTempGradient(object):  # pylint: disable=too-many-instance-attributes
 
         self.last_target_temperature = None
         self.current_z = None
-
 
     def generate_temperature_gcode(self, temperature):
         """Return a gcode line for the given temperature, under condition that the temperature
@@ -73,7 +72,6 @@ class GCodeTempGradient(object):  # pylint: disable=too-many-instance-attributes
             raise RuntimeError("Height is too small to create temperature gradient (all operation are below {}mm ?)",
                                self.min_z_change)
 
-
     def write(self, output_file=sys.stdout):
         """Write the modified GCode"""
 
@@ -113,7 +111,6 @@ class GCodeContinuousTempGradient(GCodeTempGradient):
     def __init__(self, gcode, **kwargs):
         super(GCodeContinuousTempGradient, self).__init__(gcode, **kwargs)
         self.delta_temp_per_z = None
-
 
     def _parse_gcode(self):
         super(GCodeContinuousTempGradient, self)._parse_gcode()
