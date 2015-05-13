@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with GCodeUtils.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import sys
 import math
 import datetime
@@ -31,6 +33,7 @@ gcode_strip_comment_exp = re.compile("\([^\(\)]*\)|;.*|[/\*].*\n")
 m114_exp = re.compile("\([^\(\)]*\)|[/\*].*\n|([XYZ]):?([-+]?[0-9]*\.?[0-9]*)")
 specific_exp = "(?:\([^\(\)]*\))|(?:;.*)|(?:[/\*].*\n)|(%s[-+]?[0-9]*\.?[0-9]*)"
 move_gcodes = ["G0", "G1", "G2", "G3"]
+gcode_possible_coordinate = ['x', 'y', 'z', 'e', 'f', 'i', 'j']
 
 
 class PyLine(object):
@@ -61,8 +64,8 @@ class PyLightLine(object):
 # try:
 # import gcoder_line
 #
-#     Line = gcoder_line.GLine
-#     LightLine = gcoder_line.GLightLine
+# Line = gcoder_line.GLine
+# LightLine = gcoder_line.GLightLine
 # except Exception as e:
 #     logging.warning("Memory-efficient GCoder implementation unavailable: %s" % e)
 #     Line = PyLine
@@ -102,6 +105,19 @@ def split(line):
     line.command = command[0].upper() + command[1]
     line.is_move = line.command in move_gcodes
     return split_raw
+
+
+def unsplit(line):
+    if line.command[0] == 'G':
+        format = ""
+        arg = []
+        for bit in gcode_possible_coordinate:
+            if getattr(line, bit) is not None:
+                format += " {}{:.4f}"
+                arg += [bit, getattr(line, bit)]
+        line.raw = line.command + format.format(*arg)
+    else:
+        logging.warning("unsupported gcode for unsplitting: %s", line.command)
 
 
 def parse_coordinates(line, split_raw, imperial=False, force=False):
@@ -229,11 +245,11 @@ class GCode(object):
     layers_count = property(_get_layers_count)
 
     def __init__(self, data=None, home_pos=None,
-                 layer_callback=None, deferred=False):
+                 layer_callback=None, deferred=False, line_callback=None):
         if not deferred:
-            self.prepare(data, home_pos, layer_callback)
+            self.prepare(data, home_pos, layer_callback, line_callback)
 
-    def prepare(self, data=None, home_pos=None, layer_callback=None):
+    def prepare(self, data=None, home_pos=None, layer_callback=None, line_callback=None):
         self.home_pos = home_pos
         if data:
             line_class = self.line_class
@@ -241,7 +257,7 @@ class GCode(object):
                           (l.strip() for l in data)
                           if l2]
             self._preprocess(build_layers=True,
-                             layer_callback=layer_callback)
+                             layer_callback=layer_callback, line_callback=line_callback)
         else:
             self.lines = []
             self.append_layer_id = 0
@@ -331,7 +347,7 @@ class GCode(object):
         return gline
 
     def _preprocess(self, lines=None, build_layers=False,
-                    layer_callback=None):
+                    layer_callback=None, line_callback=None):
         """Checks for imperial/relativeness settings and tool changes"""
         if not lines:
             lines = self.lines
@@ -637,7 +653,12 @@ class GCode(object):
                 line_idxs.append(layer_line)
                 layer_line += 1
                 prev_z = cur_z
-                # ## Loop done
+
+                if line_callback:
+                    line_callback(line)
+
+
+                    # ## Loop done
 
         # Store current status
         self.imperial = imperial
@@ -705,6 +726,12 @@ class GCode(object):
 
     def estimate_duration(self):
         return self.layers_count, self.duration
+
+    def write(self, output_file=sys.stdout):
+        """write the gcode program to a file like object"""
+        for layer in self.all_layers:
+            for line in layer:
+                print(line.raw, file=output_file)
 
 
 class LightGCode(GCode):
