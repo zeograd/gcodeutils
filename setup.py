@@ -23,7 +23,7 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.9a',
+    version='0.9.5',
 
     description='Reprap oriented gcode utilities',
     long_description=long_description,
@@ -85,7 +85,7 @@ setup(
     # $ pip install -e .[dev,test]
     extras_require={
         'dev': ['check-manifest', 'pylint'],
-        'test': ['coverage'],
+        'test': ['nose'],
     },
 
     # If there are data files included in your packages that need to be
@@ -107,6 +107,9 @@ setup(
     entry_points={
         'console_scripts': [
             'gcode_tempcal=gcodeutils.gcode_tempcal:main',
+            'gcode_mod=gcodeutils.gcode_mod:main',
         ],
     },
+
+    test_suite = 'nose.collector',
 )

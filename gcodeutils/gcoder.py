@@ -24,7 +24,6 @@ from array import array
 
 import re
 
-
 gcode_parsed_args = ["x", "y", "e", "f", "z", "i", "j"]
 gcode_parsed_nonargs = ["g", "t", "m", "n"]
 to_parse = "".join(gcode_parsed_args + gcode_parsed_nonargs)
@@ -33,7 +32,7 @@ gcode_strip_comment_exp = re.compile("\([^\(\)]*\)|;.*|[/\*].*\n")
 m114_exp = re.compile("\([^\(\)]*\)|[/\*].*\n|([XYZ]):?([-+]?[0-9]*\.?[0-9]*)")
 specific_exp = "(?:\([^\(\)]*\))|(?:;.*)|(?:[/\*].*\n)|(%s[-+]?[0-9]*\.?[0-9]*)"
 move_gcodes = ["G0", "G1", "G2", "G3"]
-gcode_possible_coordinate = ['x', 'y', 'z', 'e', 'f', 'i', 'j']
+gcode_possible_arguments = ['x', 'y', 'z', 'e', 'f', 'i', 'j']
 
 
 class PyLine(object):
@@ -50,6 +49,15 @@ class PyLine(object):
     def __getattr__(self, name):
         return None
 
+    def __eq__(self, other):
+        if not isinstance(other, PyLine):
+            return False
+
+        return (self.command, self.x, self.y, self.z, self.e, self.f, self.i, self.j) == (
+            other.command, other.x, other.y, other.z, other.e, other.f, other.i, other.j)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 class PyLightLine(object):
     __slots__ = ('raw', 'command')
@@ -108,16 +116,13 @@ def split(line):
 
 
 def unsplit(line):
-    if line.command[0] == 'G':
-        format = ""
-        arg = []
-        for bit in gcode_possible_coordinate:
-            if getattr(line, bit) is not None:
-                format += " {}{:.4f}"
-                arg += [bit, getattr(line, bit)]
-        line.raw = line.command + format.format(*arg)
-    else:
-        logging.warning("unsupported gcode for unsplitting: %s", line.command)
+    format = ""
+    arg = []
+    for bit in gcode_possible_arguments:
+        if getattr(line, bit) is not None:
+            format += " {}{:.4f}"
+            arg += [bit.upper(), getattr(line, bit)]
+    line.raw = line.command + format.format(*arg)
 
 
 def parse_coordinates(line, split_raw, imperial=False, force=False):
@@ -732,6 +737,39 @@ class GCode(object):
         for layer in self.all_layers:
             for line in layer:
                 print(line.raw, file=output_file)
+
+    def __eq__(self, other):
+        if not isinstance(other, GCode):
+            return False
+
+        meaningful_lines1 = self.comment_stripper_generator()
+        meaningful_lines2 = other.comment_stripper_generator()
+
+        for l1, l2 in zip(meaningful_lines1, meaningful_lines2):
+            # checking the raw representation of lines is a bit naive
+            # that will have to evolve as required
+            if l1 != l2:
+                return False
+
+        # check that generators are empty
+        # that's probably more contrived than it should be
+        try:
+            meaningful_lines1.next()
+            return False
+        except StopIteration:
+            try:
+                meaningful_lines2.next()
+                return False
+            except StopIteration:
+                pass
+        return True
+
+    def comment_stripper_generator(self):
+        """return only non comment lines"""
+        for layer in self.all_layers:
+            for line in layer:
+                if line.command is not None:
+                    yield line
 
 
 class LightGCode(GCode):
