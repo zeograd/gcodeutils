@@ -108,6 +108,7 @@ setup(
         'console_scripts': [
             'gcode_tempcal=gcodeutils.gcode_tempcal:main',
             'gcode_mod=gcodeutils.gcode_mod:main',
+            'gcode_stretch=gcodeutils.gcode_stretch:main',
         ],
     },
 
