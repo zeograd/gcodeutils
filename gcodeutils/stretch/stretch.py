@@ -70,8 +70,6 @@ from __future__ import absolute_import
 # Init has to be imported first because it has code to workaround the python bug where relative imports don't work if the module is imported as a main module.
 # import __init__
 
-import os
-import time
 from .distanceFeedRate import DistanceFeedRate
 from .vector3 import Vector3
 
@@ -155,45 +153,6 @@ def getDotProduct(firstComplex, secondComplex):
     return firstComplex.real * secondComplex.real + firstComplex.imag * secondComplex.imag
 
 
-def getChainText(fileName):
-    "Get a crafted shape file."
-    text = ''
-    if fileName.endswith('.gcode') or fileName.endswith('.svg'):
-        text = getFileText(fileName)
-    return getCraftedText(fileName, text)
-
-
-def writeFileText(fileName, fileText, writeMode='w+'):
-    'Write a text to a file.'
-    try:
-        file = open(fileName, writeMode)
-        file.write(fileText)
-        file.close()
-    except IOError:
-        print('The file ' + fileName + ' can not be written to.')
-
-
-def writeChainTextWithNounMessage(fileName, procedure):
-    'Get and write a crafted shape file.'
-    print('')
-    print('The %s tool is parsing the file:' % procedure)
-    print(os.path.basename(fileName))
-    print('')
-    startTime = time.time()
-    fileNameSuffix = fileName[: fileName.rfind('.')] + '_' + procedure + '.gcode'
-    craftText = getChainText(fileName, procedure)
-    if craftText == '':
-        print('Warning, there was no text output in writeChainTextWithNounMessage in skeinforge_craft for:')
-        print(fileName)
-        return
-    writeFileText(fileNameSuffix, craftText)
-    print('')
-    print('The %s tool has created the file:' % procedure)
-    print(fileNameSuffix)
-    print('')
-    print('It took %ss to craft the file.' % (time.time() - startTime))
-
-
 def getTextLines(text):
     'Get the all the lines of text of a text.'
     if '\r' in text:
@@ -225,31 +184,9 @@ def getTextIfEmpty(fileName, text):
     return getFileText(fileName)
 
 
-# maybe speed up feedRate option
-def getCraftedText(fileName, gcodeText, stretchRepository=None):
+def getCraftedTextFromText(gcodeText):
     "Stretch a gcode linear move text."
-    return getCraftedTextFromText(getTextIfEmpty(fileName, gcodeText), stretchRepository)
-
-
-def getCraftedTextFromText(gcodeText, stretchRepository=None):
-    "Stretch a gcode linear move text."
-    if stretchRepository == None:
-        # TODO configure stretch settings
-        # stretchRepository = settings.getReadRepository(StretchRepository())
-        stretchRepository = StretchRepository()
-    if not stretchRepository.activateStretch:
-        return gcodeText
-    return StretchSkein().getCraftedGcode(gcodeText, stretchRepository)
-
-
-def getNewRepository():
-    'Get new repository.'
-    return StretchRepository()
-
-
-def writeOutput(fileName, shouldAnalyze=True):
-    "Stretch a gcode linear move file.  Chain stretch the gcode if it is not already stretched."
-    writeChainTextWithNounMessage(fileName, 'stretch', shouldAnalyze)
+    return StretchSkein().getCraftedGcode(gcodeText, StretchRepository())
 
 
 class LineIteratorBackward:
@@ -372,11 +309,6 @@ class StretchRepository:
         self.edgeInsideStretchOverEdgeWidth = 0.32  # Perimeter Inside Stretch Over Perimeter Width (ratio)
         self.edgeOutsideStretchOverEdgeWidth = 0.1  # Perimeter Outside Stretch Over Perimeter Width (ratio)
         self.stretchFromDistanceOverEdgeWidth = 2.0  # Stretch From Distance Over Perimeter Width (ratio)
-
-    def execute(self, filenames):
-        "Stretch button has been clicked."
-        for fileName in filenames:
-            writeOutput(fileName)
 
 
 class StretchSkein:

@@ -59,6 +59,7 @@ class PyLine(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+
 class PyLightLine(object):
     __slots__ = ('raw', 'command')
 
@@ -109,8 +110,12 @@ def split(line):
         line.is_move = False
         logging.warning("raw G-Code line \"%s\" could not be parsed" % line.raw)
         return [line.raw]
+
     command = split_raw[0]
-    line.command = command[0].upper() + command[1]
+    # sanitize command if empty
+    if command != ('', ''):
+        line.command = command[0].upper() + command[1]
+
     line.is_move = line.command in move_gcodes
     return split_raw
 

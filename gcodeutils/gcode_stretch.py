@@ -1,7 +1,8 @@
 import argparse
 import logging
 import sys
-from gcodeutils.stretch.stretch import getCraftedText
+
+from gcodeutils.stretch.stretch import getCraftedTextFromText
 
 __author__ = 'olivier'
 
@@ -31,7 +32,8 @@ def main():
 
     logging.basicConfig(format="%(levelname)s:%(message)s")
 
-    args.outfile.write(getCraftedText(None, args.infile.read()))
+    args.outfile.write(getCraftedTextFromText(args.infile.read()))
+
 
 if __name__ == "__main__":
     main()
