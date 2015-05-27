@@ -435,7 +435,6 @@ class StretchSkein:
             firstWord = getFirstWord(splitLine)
             self.distanceFeedRate.parseSplitLine(firstWord, splitLine)
             if firstWord == '(</extruderInitialization>)':
-                self.distanceFeedRate.addTagBracketedProcedure('stretch')
                 return
             elif firstWord == '(<edgeWidth>':
                 edgeWidth = float(splitLine[1])

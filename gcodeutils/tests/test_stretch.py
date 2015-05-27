@@ -1,11 +1,11 @@
 import StringIO
 
-from nose.tools import eq_
-
 import os
+from nose.tools import eq_
+from gcodeutils.gcoder import GCode
 
 from gcodeutils.stretch.stretch import getCraftedTextFromText
-from gcodeutils.tests import open_gcode_file
+from gcodeutils.tests import open_gcode_file, gcode_eq
 
 __author__ = 'olivier'
 
@@ -19,4 +19,5 @@ def test_skeinforge_formatted_stretch():
     gcode_oracle_str = StringIO.StringIO()
     gcode_oracle.write(gcode_oracle_str)
 
-    eq_(gcode_oracle_str.getvalue(), gcode)
+    gcode_eq(gcode_oracle, GCode(gcode.split('\n')))
+#    eq_(gcode_oracle_str.getvalue(), gcode)

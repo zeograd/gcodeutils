@@ -743,6 +743,33 @@ class GCode(object):
             for line in layer:
                 print(line.raw, file=output_file)
 
+    def diff(self, other):
+        if not isinstance(other, GCode):
+            raise ValueError
+
+        meaningful_lines1 = self.comment_stripper_generator()
+        meaningful_lines2 = other.comment_stripper_generator()
+
+        for line_number, (l1, l2) in enumerate(zip(meaningful_lines1, meaningful_lines2)):
+            # checking the raw representation of lines is a bit naive
+            # that will have to evolve as required
+            if l1 != l2:
+                return "First difference after {} meaningful lines: '{}' vs '{}' ".format(line_number, l1.raw, l2.raw)
+
+        # check that generators are empty
+        # that's probably more contrived than it should be
+        try:
+            l1 = meaningful_lines1.next()
+            return "Remaining line(s) for self: '{}'".format(l1)
+        except StopIteration:
+            try:
+                l2 = meaningful_lines2.next()
+                return "Remaining line(s) for other: '{}'".format(l2)
+            except StopIteration:
+                pass
+
+        return None
+
     def __eq__(self, other):
         if not isinstance(other, GCode):
             return False
