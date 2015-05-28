@@ -43,6 +43,8 @@ class PyLine(object):
                  'current_tool',
                  'gcview_end_vertex')
 
+    EQ_EPSILON = 1e-5
+
     def __init__(self, l):
         self.raw = l
 
@@ -56,20 +58,23 @@ class PyLine(object):
         if self.command != other.command:
             return False
 
-        if self.x is not None and other.x is not None and math.fabs(self.x - other.x) > 1e-6:
-            return False
-        if (self.x is not None and other.x is None) or (self.x is None and other.x is not None):
-            return False
-        if self.y is not None and other.y is not None and math.fabs(self.y - other.y) > 1e-6:
-            return False
-        if self.z is not None and other.z is not None and math.fabs(self.z - other.z) > 1e-6:
-            return False
-        if self.e is not None and other.e is not None and math.fabs(self.e - other.e) > 1e-6:
-            return False
-        return True
+        for bit in gcode_possible_arguments:
+            selfbit = getattr(self, bit)
+            otherbit = getattr(other, bit)
 
-        # return (self.command, self.x, self.y, self.z, self.e, self.f, self.i, self.j) == (
-        #     other.command, other.x, other.y, other.z, other.e, other.f, other.i, other.j)
+            if selfbit is None and otherbit is None:
+                continue
+
+            if selfbit is None and otherbit is not None:
+                return False
+
+            if selfbit is not None and otherbit is None:
+                return False
+
+            if math.fabs(selfbit - otherbit) > self.EQ_EPSILON:
+                return False
+
+        return True
 
     def __ne__(self, other):
         return not self.__eq__(other)
