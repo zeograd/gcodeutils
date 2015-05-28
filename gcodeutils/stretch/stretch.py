@@ -1,58 +1,79 @@
 """
 This page is in the table of contents.
-Stretch is very important Skeinforge plugin that allows you to partially compensate for the fact that extruded holes are smaller then they should be.  It stretches the threads to partially compensate for filament shrinkage when extruded.
+Stretch is very important Skeinforge plugin that allows you to partially compensate for the fact that extruded holes are
+smaller then they should be.  It stretches the threads to partially compensate for filament shrinkage when extruded.
 
 The stretch manual page is at:
 http://fabmetheus.crsndoo.com/wiki/index.php/Skeinforge_Stretch
 
-Extruded holes are smaller than the model because while printing an arc the head is depositing filament on both sides of the arc but in the inside of the arc you actually need less material then on the outside of the arc. You can read more about this on the RepRap ArcCompensation page:
+Extruded holes are smaller than the model because while printing an arc the head is depositing filament on both sides
+of the arc but in the inside of the arc you actually need less material then on the outside of the arc. You can read
+more about this on the RepRap ArcCompensation page:
 http://reprap.org/bin/view/Main/ArcCompensation
 
-In general, stretch will widen holes and push corners out.  In practice the filament contraction will not be identical to the algorithm, so even once the optimal parameters are determined, the stretch script will not be able to eliminate the inaccuracies caused by contraction, but it should reduce them.
+In general, stretch will widen holes and push corners out.  In practice the filament contraction will not be identical
+to the algorithm, so even once the optimal parameters are determined, the stretch script will not be able to eliminate
+the inaccuracies caused by contraction, but it should reduce them.
 
-All the defaults assume that the thread sequence choice setting in fill is the edge being extruded first, then the loops, then the infill.  If the thread sequence choice is different, the optimal thread parameters will also be different.  In general, if the infill is extruded first, the infill would have to be stretched more so that even after the filament shrinkage, it would still be long enough to connect to the loop or edge.
+All the defaults assume that the thread sequence choice setting in fill is the edge being extruded first, then the
+loops, then the infill.  If the thread sequence choice is different, the optimal thread parameters will also be
+different.  In general, if the infill is extruded first, the infill would have to be stretched more so that even after
+the filament shrinkage, it would still be long enough to connect to the loop or edge.
 
-Holes should be made with the correct area for their radius.  In other words, for example if your modeling program approximates a hole of radius one (area = pi) by making a square with the points at [(1,0), (0,1), (-1,0), (0,-1)] (area = 2), the radius should be increased by sqrt(pi/2).  This can be done in fabmetheus xml by writing:
+Holes should be made with the correct area for their radius.  In other words, for example if your modeling program
+approximates a hole of radius one (area = pi) by making a square with the points at [(1,0), (0,1), (-1,0), (0,-1)]
+(area = 2), the radius should be increased by sqrt(pi/2).  This can be done in fabmetheus xml by writing:
 radiusAreal='True'
 
-in the attributes of the object or any parent of that object.  In other modeling programs, you'll have to this manually or make a script.  If area compensation is not done, then changing the stretch parameters to over compensate for too small hole areas will lead to incorrect compensation in other shapes.
-
-==Operation==
-The default 'Activate Stretch' checkbox is off.  When it is on, the functions described below will work, when it is off, the functions will not be called.
+in the attributes of the object or any parent of that object.  In other modeling programs, you'll have to this manually
+or make a script.  If area compensation is not done, then changing the stretch parameters to over compensate for too
+small hole areas will lead to incorrect compensation in other shapes.
 
 ==Settings==
 ===Loop Stretch Over Perimeter Width===
 Default is 0.1.
 
-Defines the ratio of the maximum amount the loop aka inner shell threads will be stretched compared to the edge width, in general this value should be the same as the 'Perimeter Outside Stretch Over Perimeter Width' setting.
+Defines the ratio of the maximum amount the loop aka inner shell threads will be stretched compared to the edge width,
+in general this value should be the same as the 'Perimeter Outside Stretch Over Perimeter Width' setting.
 
 ===Path Stretch Over Perimeter Width===
 Default is zero.
 
-Defines the ratio of the maximum amount the threads which are not loops, like the infill threads, will be stretched compared to the edge width.
+Defines the ratio of the maximum amount the threads which are not loops, like the infill threads, will be stretched
+compared to the edge width.
 
 ===Perimeter===
 ====Perimeter Inside Stretch Over Perimeter Width====
 Default is 0.32.
 
-Defines the ratio of the maximum amount the inside edge thread will be stretched compared to the edge width, this is the most important setting in stretch.  The higher the value the more it will stretch the edge and the wider holes will be.  If the value is too small, the holes could be drilled out after fabrication, if the value is too high, the holes would be too wide and the part would have to junked.
+Defines the ratio of the maximum amount the inside edge thread will be stretched compared to the edge width, this is
+the most important setting in stretch.  The higher the value the more it will stretch the edge and the wider holes will
+be.  If the value is too small, the holes could be drilled out after fabrication, if the value is too high, the holes
+would be too wide and the part would have to junked.
 
 ====Perimeter Outside Stretch Over Perimeter Width====
 Default is 0.1.
 
-Defines the ratio of the maximum amount the outside edge thread will be stretched compared to the edge width, in general this value should be around a third of the 'Perimeter Inside Stretch Over Perimeter Width' setting.
+Defines the ratio of the maximum amount the outside edge thread will be stretched compared to the edge width, in
+general this value should be around a third of the 'Perimeter Inside Stretch Over Perimeter Width' setting.
 
 ===Stretch from Distance over Perimeter Width===
 Default is two.
 
-The stretch algorithm works by checking at each turning point on the extrusion path what the direction of the thread is at a distance of 'Stretch from Distance over Perimeter Width' times the edge width, on both sides, and moves the thread in the opposite direction.  So it takes the current turning-point, goes "Stretch from Distance over Perimeter Width" * "Perimeter Width" ahead, reads the direction at that point.  Then it goes the same distance in back in time, reads the direction at that other point.  It then moves the thread in the opposite direction, away from the center of the arc formed by these 2 points+directions.
+The stretch algorithm works by checking at each turning point on the extrusion path what the direction of the thread
+is at a distance of 'Stretch from Distance over Perimeter Width' times the edge width, on both sides, and moves the
+thread in the opposite direction.  So it takes the current turning-point, goes
+"Stretch from Distance over Perimeter Width" * "Perimeter Width" ahead, reads the direction at that point.  Then it
+goes the same distance in back in time, reads the direction at that other point.  It then moves the thread in the
+opposite direction, away from the center of the arc formed by these 2 points+directions.
 
 The magnitude of the stretch increases with:
 the amount that the direction of the two threads is similar and
 by the '..Stretch Over Perimeter Width' ratio.
 
 ==Examples==
-The following examples stretch the file Screw Holder Bottom.stl.  The examples are run in a terminal in the folder which contains Screw Holder Bottom.stl and stretch.py.
+The following examples stretch the file Screw Holder Bottom.stl.  The examples are run in a terminal in the folder
+which contains Screw Holder Bottom.stl and stretch.py.
 
 > python stretch.py
 This brings up the stretch dialog.
@@ -67,12 +88,12 @@ The stretch tool has created the file:
 """
 
 from __future__ import absolute_import
-# Init has to be imported first because it has code to workaround the python bug where relative imports don't work if the module is imported as a main module.
-# import __init__
+import copy
+
 import re
 
 from .distanceFeedRate import DistanceFeedRate
-from gcodeutils.gcoder import GCode, Layer
+from gcodeutils.gcoder import GCode, split, Line, parse_coordinates
 from .vector3 import Vector3
 
 __author__ = 'Enrique Perez (perez_enrique@yahoo.com)'
@@ -80,61 +101,16 @@ __date__ = '$Date: 2008/21/04 $'
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
 
 
-def getIndexOfStartingWithSecond(letter, splitLine):
-    'Get index of the first occurence of the given letter in the split line, starting with the second word.  Return - 1 if letter is not found'
-    for wordIndex in xrange(1, len(splitLine)):
-        word = splitLine[wordIndex]
-        firstLetter = word[0]
-        if firstLetter == letter:
-            return wordIndex
-    return - 1
+def get_location_from_line(old_location, line):
+    """Get the location from a GCode line, carrying over existing location."""
+    if old_location is None:
+        old_location = Vector3()
 
-
-def getDoubleFromCharacterSplitLine(character, splitLine):
-    'Get the double value of the string after the first occurence of the character in the split line.'
-    indexOfCharacter = getIndexOfStartingWithSecond(character, splitLine)
-    if indexOfCharacter < 0:
-        return None
-    floatString = splitLine[indexOfCharacter][1:]
-    try:
-        return float(floatString)
-    except ValueError:
-        return None
-
-
-def getDoubleFromCharacterSplitLineValue(character, splitLine, value):
-    'Get the double value of the string after the first occurence of the character in the split line, if it does not exist return the value.'
-    splitLineFloat = getDoubleFromCharacterSplitLine(character, splitLine)
-    if splitLineFloat == None:
-        return value
-    return splitLineFloat
-
-
-def getLocationFromSplitLine(oldLocation, splitLine, line):
-    'Get the location from the split line.'
-    if oldLocation == None:
-        oldLocation = Vector3()
     return Vector3(
-        getDoubleFromCharacterSplitLineValue('X', splitLine, oldLocation.x),
-        getDoubleFromCharacterSplitLineValue('Y', splitLine, oldLocation.y),
-        getDoubleFromCharacterSplitLineValue('Z', splitLine, oldLocation.z))
-
-
-def getFirstWord(splitLine):
-    'Get the first word of a split line.'
-    if len(splitLine) > 0:
-        return splitLine[0]
-    return ''
-
-
-def getSplitLineBeforeBracketSemicolon(line):
-    'Get the split line before a bracket or semicolon.'
-    if ';' in line:
-        line = line[: line.find(';')]
-    bracketIndex = line.find('(')
-    if bracketIndex > 0:
-        return line[: bracketIndex].split()
-    return line.split()
+        line.x if line.x is not None else old_location.x,
+        line.y if line.y is not None else old_location.y,
+        line.z if line.z is not None else old_location.z,
+    )
 
 
 def getDotProduct(firstComplex, secondComplex):
@@ -143,8 +119,8 @@ def getDotProduct(firstComplex, secondComplex):
 
 
 def getCraftedTextFromText(gcodeText):
-    "Stretch a gcode linear move text."
-    return GCode(StretchFilter().filter(gcodeText).split('\n'))
+    """Stretch a gcode linear move text."""
+    return GCode(StretchFilter().filter(GCode(gcodeText.split('\n'))).split('\n'))
 
 
 class LineIteratorBackward:
@@ -192,11 +168,9 @@ class LineIteratorBackward:
                         raise StopIteration, "You've reached the end of the line."
                 else:
                     self.lineIndex = nextLineIndex
-                    return line.raw
+                    print("B: {}".format(line))
+                    return line
             self.lineIndex = nextLineIndex
-
-        if self.isLoop:
-            nextLineIndex = self.getIndexBeforeNextDeactivate()
 
         raise StopIteration, "You've reached the end of the line."
 
@@ -243,7 +217,8 @@ class LineIteratorForward(LineIteratorBackward):
                     raise StopIteration, "You've reached the end of the line."
             self.lineIndex = nextLineIndex
             if line.command == 'G1':
-                return line.raw
+                print("F: {}".format(line))
+                return line
         raise StopIteration, "You've reached the end of the line."
 
 
@@ -266,7 +241,7 @@ class StretchFilter:
 
     EDGE_WIDTH_REGEXP = re.compile(r'\(<edgeWidth> ([\.\d]+)')
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.distanceFeedRate = DistanceFeedRate()
         self.edgeWidth = 0.4
         self.extruderActive = False
@@ -280,19 +255,34 @@ class StretchFilter:
 
         self.thread_maximum_absolute_stretch = 0
 
-    def filter(self, gcodeText):
-        "Parse gcode text and store the stretch gcode."
-        self.gcode = GCode(gcodeText.split('\n'))
+    def filter(self, gcode):
+        """Parse gcode text and store the stretch gcode."""
+        self.gcode = gcode
+
         # self.stretchRepository = stretchRepository
 
         init_done = False
 
-        for self.current_layer_index, self.current_layer in enumerate(self.gcode.all_layers):
-            for self.line_number_in_layer, line in enumerate(self.current_layer):
+        # for self.current_layer_index, self.current_layer in enumerate(self.gcode.all_layers):
+        #     for self.line_number_in_layer, line in enumerate(self.current_layer):
+
+        for self.current_layer_index in xrange(0, len(self.gcode.all_layers)):
+            self.current_layer = self.gcode.all_layers[self.current_layer_index][:]
+            for self.line_number_in_layer in xrange(0, len(self.current_layer)):
+                line = self.current_layer[self.line_number_in_layer]
                 if init_done:
-                    self.parse_line(line)
+                    result_line = self.parse_line(line)
+                    self.distanceFeedRate.add_line(result_line)
+
+                    gcode_line = Line(result_line)
+                    parse_coordinates(gcode_line, split(gcode_line))
+                    # print("replacing {} by {}".format(self.gcode.all_layers[self.current_layer_index][self.line_number_in_layer], gcode_line))
+                    self.gcode.all_layers[self.current_layer_index][self.line_number_in_layer] = gcode_line
+                    # self.current_layer[self.line_number_in_layer] = gcode_line
+
                 else:
                     init_done = self.parse_initialisation_line(line)
+                    self.distanceFeedRate.add_line(line.raw)
 
         return self.distanceFeedRate.output.getvalue()
 
@@ -302,8 +292,7 @@ class StretchFilter:
             line = crossLineIterator.getNext()
         except StopIteration:
             return crossLimitedStretch
-        splitLine = getSplitLineBeforeBracketSemicolon(line)
-        pointComplex = getLocationFromSplitLine(self.oldLocation, splitLine, line).dropAxis()
+        pointComplex = get_location_from_line(self.oldLocation, line).dropAxis()
         pointMinusLocation = locationComplex - pointComplex
         pointMinusLocationLength = abs(pointMinusLocation)
         if pointMinusLocationLength <= self.crossLimitDistanceFraction:
@@ -332,9 +321,7 @@ class StretchFilter:
                 if locationMinusPointLength > 0.0:
                     return locationMinusPoint / locationMinusPointLength
                 return complex()
-            splitLine = getSplitLineBeforeBracketSemicolon(line)
-            firstWord = splitLine[0]
-            pointComplex = getLocationFromSplitLine(self.oldLocation, splitLine, line).dropAxis()
+            pointComplex = get_location_from_line(self.oldLocation, line).dropAxis()
             locationMinusPoint = lastLocationComplex - pointComplex
             locationMinusPointLength = abs(locationMinusPoint)
             totalLength += locationMinusPointLength
@@ -346,9 +333,9 @@ class StretchFilter:
             lastLocationComplex = pointComplex
             oldTotalLength = totalLength
 
-    def getStretchedLine(self, splitLine, line):
+    def stretch_line(self, line):
         "Get stretched gcode line."
-        location = getLocationFromSplitLine(self.oldLocation, splitLine, line)
+        location = get_location_from_line(self.oldLocation, line)
         self.feedRateMinute = line.f or self.feedRateMinute
         self.oldLocation = location
         if self.extruderActive and self.thread_maximum_absolute_stretch > 0.0:
@@ -376,7 +363,8 @@ class StretchFilter:
             relativeStretch /= relativeStretchLength
         absoluteStretch = relativeStretch * self.thread_maximum_absolute_stretch
         stretchedPoint = location.dropAxis() + absoluteStretch
-        return self.distanceFeedRate.getLinearGcodeMovementWithFeedRate(self.feedRateMinute, stretchedPoint, location.z)
+        return self.distanceFeedRate.get_linear_gcode_movement_with_feedrate(self.feedRateMinute, stretchedPoint,
+                                                                             location.z)
 
     def isJustBeforeExtrusion(self):
         "Determine if activate command is before linear move command."
@@ -388,7 +376,7 @@ class StretchFilter:
         return False
 
     def parse_initialisation_line(self, line):
-        self.distanceFeedRate.parseSplitLine(line.raw)
+        self.distanceFeedRate.search_decimal_places_carried(line.raw)
         if line.raw == '(</extruderInitialization>)':
             return True
         match = self.EDGE_WIDTH_REGEXP.match(line.raw)
@@ -403,16 +391,14 @@ class StretchFilter:
             self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
             self.crossLimitDistanceFraction = 0.333333333 * self.crossLimitDistance
             self.crossLimitDistanceRemainder = self.crossLimitDistance - self.crossLimitDistanceFraction
-        self.distanceFeedRate.addLine(line.raw)
         return False
 
     def parse_line(self, line):
         """Parse a gcode line and add it to the stretch skein."""
-        splitLine = getSplitLineBeforeBracketSemicolon(line.raw)
-        command = splitLine[0]
+        command = line.command
         if command == 'G1':
-            self.distanceFeedRate.addLine(self.getStretchedLine(splitLine, line))
-            return
+            stretched_line = self.stretch_line(line)
+            return stretched_line
         elif command == 'M101':
             self.extruderActive = True
         elif command == 'M103':
@@ -432,7 +418,7 @@ class StretchFilter:
         elif self.is_edge_end(line):
             self.set_stretch_to_path()
 
-        self.distanceFeedRate.addLine(line.raw)
+        return line.raw
 
     def set_stretch_to_path(self):
         """Set the thread stretch to path stretch and is loop false."""
