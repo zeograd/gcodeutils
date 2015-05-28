@@ -69,6 +69,7 @@ The stretch tool has created the file:
 from __future__ import absolute_import
 # Init has to be imported first because it has code to workaround the python bug where relative imports don't work if the module is imported as a main module.
 # import __init__
+import re
 
 from .distanceFeedRate import DistanceFeedRate
 from gcodeutils.gcoder import GCode, Layer
@@ -77,19 +78,6 @@ from .vector3 import Vector3
 __author__ = 'Enrique Perez (perez_enrique@yahoo.com)'
 __date__ = '$Date: 2008/21/04 $'
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
-
-
-def getDoubleAfterFirstLetter(word):
-    'Get the double value of the word after the first letter.'
-    return float(word[1:])
-
-
-def getFeedRateMinute(feedRateMinute, splitLine):
-    'Get the feed rate per minute if the split line has a feed rate.'
-    indexOfF = getIndexOfStartingWithSecond('F', splitLine)
-    if indexOfF > 0:
-        return getDoubleAfterFirstLetter(splitLine[indexOfF])
-    return feedRateMinute
 
 
 def getIndexOfStartingWithSecond(letter, splitLine):
@@ -122,7 +110,7 @@ def getDoubleFromCharacterSplitLineValue(character, splitLine, value):
     return splitLineFloat
 
 
-def getLocationFromSplitLine(oldLocation, splitLine):
+def getLocationFromSplitLine(oldLocation, splitLine, line):
     'Get the location from the split line.'
     if oldLocation == None:
         oldLocation = Vector3()
@@ -154,40 +142,9 @@ def getDotProduct(firstComplex, secondComplex):
     return firstComplex.real * secondComplex.real + firstComplex.imag * secondComplex.imag
 
 
-def getTextLines(text):
-    'Get the all the lines of text of a text.'
-    if '\r' in text:
-        text = text.replace('\r', '\n').replace('\n\n', '\n')
-    textLines = text.split('\n')
-    if len(textLines) == 1:
-        if textLines[0] == '':
-            return []
-    return textLines
-
-
-def getFileText(fileName, printWarning=True, readMode='r'):
-    'Get the entire text of a file.'
-    try:
-        file = open(fileName, readMode)
-        fileText = file.read()
-        file.close()
-        return fileText
-    except IOError:
-        if printWarning:
-            print('The file ' + fileName + ' does not exist.')
-    return ''
-
-
-def getTextIfEmpty(fileName, text):
-    'Get the text from a file if it the text is empty.'
-    if text is not None and text != '':
-        return text
-    return getFileText(fileName)
-
-
 def getCraftedTextFromText(gcodeText):
     "Stretch a gcode linear move text."
-    return GCode(StretchSkein().getCraftedGcode(gcodeText, StretchRepository()).split('\n'))
+    return GCode(StretchFilter().filter(gcodeText).split('\n'))
 
 
 class LineIteratorBackward:
@@ -197,18 +154,13 @@ class LineIteratorBackward:
         self.firstLineIndex = None
         self.isLoop = isLoop
         self.lineIndex = lineIndex
-        if isinstance(lines, Layer):
-            self.lines = [l.raw for l in lines]
-        else:
-            self.lines = lines
+        # self.lines = [l.raw for l in lines]
+        self.lines = lines
 
     def getIndexBeforeNextDeactivate(self):
         "Get index two lines before the deactivate command."
         for lineIndex in xrange(self.lineIndex + 1, len(self.lines)):
-            line = self.lines[lineIndex]
-            splitLine = getSplitLineBeforeBracketSemicolon(line)
-            firstWord = getFirstWord(splitLine)
-            if firstWord == 'M103':
+            if self.lines[lineIndex].command == 'M103':
                 return lineIndex - 2
         print('This should never happen in stretch, no deactivate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
@@ -227,14 +179,12 @@ class LineIteratorBackward:
                 self.firstLineIndex = self.lineIndex
             nextLineIndex = self.lineIndex - 1
             line = self.lines[self.lineIndex]
-            splitLine = getSplitLineBeforeBracketSemicolon(line)
-            firstWord = getFirstWord(splitLine)
-            if firstWord == 'M103':
+            if line.command == 'M103':
                 if self.isLoop:
                     nextLineIndex = self.getIndexBeforeNextDeactivate()
                 else:
                     raise StopIteration, "You've reached the end of the line."
-            if firstWord == 'G1':
+            if line.command == 'G1':
                 if self.isBeforeExtrusion():
                     if self.isLoop:
                         nextLineIndex = self.getIndexBeforeNextDeactivate()
@@ -242,7 +192,7 @@ class LineIteratorBackward:
                         raise StopIteration, "You've reached the end of the line."
                 else:
                     self.lineIndex = nextLineIndex
-                    return line
+                    return line.raw
             self.lineIndex = nextLineIndex
 
         if self.isLoop:
@@ -255,38 +205,24 @@ class LineIteratorBackward:
         linearMoves = 0
         for lineIndex in xrange(self.lineIndex + 1, len(self.lines)):
             line = self.lines[lineIndex]
-            splitLine = getSplitLineBeforeBracketSemicolon(line)
-            firstWord = getFirstWord(splitLine)
-            if firstWord == 'G1':
+            if line.command == 'G1':
                 linearMoves += 1
-            if firstWord == 'M101':
+            if line.command == 'M101':
                 return linearMoves > 0
-            if firstWord == 'M103':
+            if line.command == 'M103':
                 return False
         print(
             'This should never happen in isBeforeExtrusion in stretch, no activate command was found for this thread.')
         return False
 
 
-class LineIteratorForward:
+class LineIteratorForward(LineIteratorBackward):
     "Forward line iterator class."
-
-    def __init__(self, isLoop, lineIndex, lines):
-        self.firstLineIndex = None
-        self.isLoop = isLoop
-        self.lineIndex = lineIndex
-        if isinstance(lines, Layer):
-            self.lines = [l.raw for l in lines]
-        else:
-            self.lines = lines
 
     def getIndexJustAfterActivate(self):
         "Get index just after the activate command."
         for lineIndex in xrange(self.lineIndex - 1, 0, - 1):
-            line = self.lines[lineIndex]
-            splitLine = getSplitLineBeforeBracketSemicolon(line)
-            firstWord = getFirstWord(splitLine)
-            if firstWord == 'M101':
+            if self.lines[lineIndex].command == 'M101':
                 return lineIndex + 1
         print('This should never happen in stretch, no activate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
@@ -300,16 +236,14 @@ class LineIteratorForward:
                 self.firstLineIndex = self.lineIndex
             nextLineIndex = self.lineIndex + 1
             line = self.lines[self.lineIndex]
-            splitLine = getSplitLineBeforeBracketSemicolon(line)
-            firstWord = getFirstWord(splitLine)
-            if firstWord == 'M103':
+            if line.command == 'M103':
                 if self.isLoop:
                     nextLineIndex = self.getIndexJustAfterActivate()
                 else:
                     raise StopIteration, "You've reached the end of the line."
             self.lineIndex = nextLineIndex
-            if firstWord == 'G1':
-                return line
+            if line.command == 'G1':
+                return line.raw
         raise StopIteration, "You've reached the end of the line."
 
 
@@ -327,8 +261,10 @@ class StretchRepository:
         self.stretchFromDistanceOverEdgeWidth = 2.0  # Stretch From Distance Over Perimeter Width (ratio)
 
 
-class StretchSkein:
+class StretchFilter:
     "A class to stretch a skein of extrusions."
+
+    EDGE_WIDTH_REGEXP = re.compile(r'\(<edgeWidth> ([\.\d]+)')
 
     def __init__(self):
         self.distanceFeedRate = DistanceFeedRate()
@@ -336,29 +272,27 @@ class StretchSkein:
         self.extruderActive = False
         self.feedRateMinute = 959.0
         self.isLoop = False
-        self.lineIndex = 0
-        self.lines = None
         self.oldLocation = None
         self.gcode = None
         self.current_layer = None
         self.line_number_in_layer = 0
+        self.stretchRepository = StretchRepository()
 
-    def getCraftedGcode(self, gcodeText, stretchRepository):
+        self.thread_maximum_absolute_stretch = 0
+
+    def filter(self, gcodeText):
         "Parse gcode text and store the stretch gcode."
-        self.lines = getTextLines(gcodeText)
         self.gcode = GCode(gcodeText.split('\n'))
-        self.stretchRepository = stretchRepository
+        # self.stretchRepository = stretchRepository
 
         init_done = False
 
         for self.current_layer_index, self.current_layer in enumerate(self.gcode.all_layers):
             for self.line_number_in_layer, line in enumerate(self.current_layer):
                 if init_done:
-                    self.parseStretch(line.raw)
+                    self.parse_line(line)
                 else:
-                    init_done = self.parse_initialisation_line(line.raw)
-
-                self.lineIndex += 1
+                    init_done = self.parse_initialisation_line(line)
 
         return self.distanceFeedRate.output.getvalue()
 
@@ -369,7 +303,7 @@ class StretchSkein:
         except StopIteration:
             return crossLimitedStretch
         splitLine = getSplitLineBeforeBracketSemicolon(line)
-        pointComplex = getLocationFromSplitLine(self.oldLocation, splitLine).dropAxis()
+        pointComplex = getLocationFromSplitLine(self.oldLocation, splitLine, line).dropAxis()
         pointMinusLocation = locationComplex - pointComplex
         pointMinusLocationLength = abs(pointMinusLocation)
         if pointMinusLocationLength <= self.crossLimitDistanceFraction:
@@ -400,7 +334,7 @@ class StretchSkein:
                 return complex()
             splitLine = getSplitLineBeforeBracketSemicolon(line)
             firstWord = splitLine[0]
-            pointComplex = getLocationFromSplitLine(self.oldLocation, splitLine).dropAxis()
+            pointComplex = getLocationFromSplitLine(self.oldLocation, splitLine, line).dropAxis()
             locationMinusPoint = lastLocationComplex - pointComplex
             locationMinusPointLength = abs(locationMinusPoint)
             totalLength += locationMinusPointLength
@@ -412,16 +346,18 @@ class StretchSkein:
             lastLocationComplex = pointComplex
             oldTotalLength = totalLength
 
-    def getStretchedLine(self, splitLine):
+    def getStretchedLine(self, splitLine, line):
         "Get stretched gcode line."
-        location = getLocationFromSplitLine(self.oldLocation, splitLine)
-        self.feedRateMinute = getFeedRateMinute(self.feedRateMinute, splitLine)
+        location = getLocationFromSplitLine(self.oldLocation, splitLine, line)
+        self.feedRateMinute = line.f or self.feedRateMinute
         self.oldLocation = location
-        if self.extruderActive and self.threadMaximumAbsoluteStretch > 0.0:
-            return self.getStretchedLineFromIndexLocation(self.line_number_in_layer - 1, self.line_number_in_layer + 1, location)
-        if self.isJustBeforeExtrusion() and self.threadMaximumAbsoluteStretch > 0.0:
-            return self.getStretchedLineFromIndexLocation(self.line_number_in_layer- 1, self.line_number_in_layer + 1, location)
-        return self.lines[self.lineIndex]
+        if self.extruderActive and self.thread_maximum_absolute_stretch > 0.0:
+            return self.getStretchedLineFromIndexLocation(self.line_number_in_layer - 1, self.line_number_in_layer + 1,
+                                                          location)
+        if self.isJustBeforeExtrusion() and self.thread_maximum_absolute_stretch > 0.0:
+            return self.getStretchedLineFromIndexLocation(self.line_number_in_layer - 1, self.line_number_in_layer + 1,
+                                                          location)
+        return line.raw
 
     def getStretchedLineFromIndexLocation(self, indexPreviousStart, indexNextStart, location):
         "Get stretched gcode line from line index and location."
@@ -438,13 +374,13 @@ class StretchSkein:
         relativeStretchLength = abs(relativeStretch)
         if relativeStretchLength > 1.0:
             relativeStretch /= relativeStretchLength
-        absoluteStretch = relativeStretch * self.threadMaximumAbsoluteStretch
+        absoluteStretch = relativeStretch * self.thread_maximum_absolute_stretch
         stretchedPoint = location.dropAxis() + absoluteStretch
         return self.distanceFeedRate.getLinearGcodeMovementWithFeedRate(self.feedRateMinute, stretchedPoint, location.z)
 
     def isJustBeforeExtrusion(self):
         "Determine if activate command is before linear move command."
-        for line in self.current_layer[self.line_number_in_layer+1:]:
+        for line in self.current_layer[self.line_number_in_layer + 1:]:
             if line.command == 'G1' or line.command == 'M103':
                 return False
             if line.command == 'M101':
@@ -452,53 +388,68 @@ class StretchSkein:
         return False
 
     def parse_initialisation_line(self, line):
-        splitLine = getSplitLineBeforeBracketSemicolon(line)
-        firstWord = getFirstWord(splitLine)
-        self.distanceFeedRate.parseSplitLine(firstWord, splitLine)
-        if firstWord == '(</extruderInitialization>)':
+        self.distanceFeedRate.parseSplitLine(line.raw)
+        if line.raw == '(</extruderInitialization>)':
             return True
-        elif firstWord == '(<edgeWidth>':
-            edgeWidth = float(splitLine[1])
+        match = self.EDGE_WIDTH_REGEXP.match(line.raw)
+        if match:
+            edgeWidth = float(match.group(1))
             self.crossLimitDistance = self.edgeWidth * self.stretchRepository.crossLimitDistanceOverEdgeWidth
             self.loopMaximumAbsoluteStretch = self.edgeWidth * self.stretchRepository.loopStretchOverEdgeWidth
             self.pathAbsoluteStretch = self.edgeWidth * self.stretchRepository.pathStretchOverEdgeWidth
             self.edgeInsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeInsideStretchOverEdgeWidth
             self.edgeOutsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeOutsideStretchOverEdgeWidth
             self.stretchFromDistance = self.stretchRepository.stretchFromDistanceOverEdgeWidth * edgeWidth
-            self.threadMaximumAbsoluteStretch = self.pathAbsoluteStretch
+            self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
             self.crossLimitDistanceFraction = 0.333333333 * self.crossLimitDistance
             self.crossLimitDistanceRemainder = self.crossLimitDistance - self.crossLimitDistanceFraction
-        self.distanceFeedRate.addLine(line)
+        self.distanceFeedRate.addLine(line.raw)
         return False
 
-    def parseStretch(self, line):
-        "Parse a gcode line and add it to the stretch skein."
-        splitLine = getSplitLineBeforeBracketSemicolon(line)
-        if len(splitLine) < 1:
+    def parse_line(self, line):
+        """Parse a gcode line and add it to the stretch skein."""
+        splitLine = getSplitLineBeforeBracketSemicolon(line.raw)
+        command = splitLine[0]
+        if command == 'G1':
+            self.distanceFeedRate.addLine(self.getStretchedLine(splitLine, line))
             return
-        firstWord = splitLine[0]
-        if firstWord == 'G1':
-            line = self.getStretchedLine(splitLine)
-        elif firstWord == 'M101':
+        elif command == 'M101':
             self.extruderActive = True
-        elif firstWord == 'M103':
+        elif command == 'M103':
             self.extruderActive = False
-            self.setStretchToPath()
-        elif firstWord == '(<loop>':
+            self.set_stretch_to_path()
+        elif self.is_loop_begin(line):
             self.isLoop = True
-            self.threadMaximumAbsoluteStretch = self.loopMaximumAbsoluteStretch
-        elif firstWord == '(</loop>)':
-            self.setStretchToPath()
-        elif firstWord == '(<edge>':
+            self.thread_maximum_absolute_stretch = self.loopMaximumAbsoluteStretch
+        elif self.is_loop_end(line):
+            self.set_stretch_to_path()
+        elif self.is_inner_edge_begin(line):
             self.isLoop = True
-            self.threadMaximumAbsoluteStretch = self.edgeInsideAbsoluteStretch
-            if splitLine[1] == 'outer':
-                self.threadMaximumAbsoluteStretch = self.edgeOutsideAbsoluteStretch
-        elif firstWord == '(</edge>)':
-            self.setStretchToPath()
-        self.distanceFeedRate.addLine(line)
+            self.thread_maximum_absolute_stretch = self.edgeInsideAbsoluteStretch
+        elif self.is_outer_edge_begin(line):
+            self.isLoop = True
+            self.thread_maximum_absolute_stretch = self.edgeOutsideAbsoluteStretch
+        elif self.is_edge_end(line):
+            self.set_stretch_to_path()
 
-    def setStretchToPath(self):
-        "Set the thread stretch to path stretch and is loop false."
+        self.distanceFeedRate.addLine(line.raw)
+
+    def set_stretch_to_path(self):
+        """Set the thread stretch to path stretch and is loop false."""
         self.isLoop = False
-        self.threadMaximumAbsoluteStretch = self.pathAbsoluteStretch
+        self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
+
+    def is_loop_begin(self, line):
+        return line.raw.startswith("(<loop>")
+
+    def is_loop_end(self, line):
+        return line.raw.startswith("(</loop>)")
+
+    def is_inner_edge_begin(self, line):
+        return line.raw.startswith("(<edge>") and not line.raw.startswith("(<edge> outer")
+
+    def is_outer_edge_begin(self, line):
+        return line.raw.startswith("(<edge> outer")
+
+    def is_edge_end(self, line):
+        return line.raw.startswith("(/edge>)")

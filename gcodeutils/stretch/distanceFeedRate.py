@@ -1,5 +1,6 @@
 import cStringIO
 import math
+import re
 
 __author__ = 'olivier'
 
@@ -50,6 +51,9 @@ def getFourSignificantFigures(number):
 
 class DistanceFeedRate:
     'A class to limit the z feed rate and round values.'
+
+    DECIMAL_PLACES_CARRIED_REGEXP = re.compile('^\(<decimalPlacesCarried> (\d+)')
+
 
     def __init__(self):
         'Initialize.'
@@ -167,10 +171,13 @@ class DistanceFeedRate:
             return linearGcodeMovement
         return linearGcodeMovement + ' F' + self.getRounded(feedRateMinute)
 
-    def parseSplitLine(self, firstWord, splitLine):
-        'Parse gcode split line and store the parameters.'
-        if firstWord == '(<decimalPlacesCarried>':
-            self.decimalPlacesCarried = int(splitLine[1])
+    def parseSplitLine(self, raw_line):
+        '''Search for skeinforge specific decimalPlaceCarried setting to store it.'''
+        match = self.DECIMAL_PLACES_CARRIED_REGEXP.match(raw_line)
+
+        if match:
+            self.decimalPlacesCarried = int(match.group(1))
+
 
     def getRounded(self, number):
         'Get number rounded to the number of carried decimal places as a string.'
