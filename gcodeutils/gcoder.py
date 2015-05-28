@@ -53,8 +53,23 @@ class PyLine(object):
         if not isinstance(other, PyLine):
             return False
 
-        return (self.command, self.x, self.y, self.z, self.e, self.f, self.i, self.j) == (
-            other.command, other.x, other.y, other.z, other.e, other.f, other.i, other.j)
+        if self.command != other.command:
+            return False
+
+        if self.x is not None and other.x is not None and math.fabs(self.x - other.x) > 1e-6:
+            return False
+        if (self.x is not None and other.x is None) or (self.x is None and other.x is not None):
+            return False
+        if self.y is not None and other.y is not None and math.fabs(self.y - other.y) > 1e-6:
+            return False
+        if self.z is not None and other.z is not None and math.fabs(self.z - other.z) > 1e-6:
+            return False
+        if self.e is not None and other.e is not None and math.fabs(self.e - other.e) > 1e-6:
+            return False
+        return True
+
+        # return (self.command, self.x, self.y, self.z, self.e, self.f, self.i, self.j) == (
+        #     other.command, other.x, other.y, other.z, other.e, other.f, other.i, other.j)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -138,6 +153,8 @@ def unsplit(line):
 
 def parse_coordinates(line, split_raw, imperial=False, force=False):
     # Not a G-line, we don't want to parse its arguments
+    if line.command is None:
+        return
     if not force and line.command[0] != "G":
         return
     unit_factor = 25.4 if imperial else 1
