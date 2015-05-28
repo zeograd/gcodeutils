@@ -71,7 +71,7 @@ from __future__ import absolute_import
 # import __init__
 
 from .distanceFeedRate import DistanceFeedRate
-from gcodeutils.gcoder import GCode
+from gcodeutils.gcoder import GCode, Layer
 from .vector3 import Vector3
 
 __author__ = 'Enrique Perez (perez_enrique@yahoo.com)'
@@ -197,7 +197,10 @@ class LineIteratorBackward:
         self.firstLineIndex = None
         self.isLoop = isLoop
         self.lineIndex = lineIndex
-        self.lines = lines
+        if isinstance(lines, Layer):
+            self.lines = [l.raw for l in lines]
+        else:
+            self.lines = lines
 
     def getIndexBeforeNextDeactivate(self):
         "Get index two lines before the deactivate command."
@@ -212,7 +215,12 @@ class LineIteratorBackward:
 
     def getNext(self):
         "Get next line going backward or raise exception."
-        while self.lineIndex > 3:
+
+        if self.lineIndex < 1:
+            if self.isLoop:
+                self.lineIndex = self.getIndexBeforeNextDeactivate()
+
+        while self.lineIndex >= 0:
             if self.lineIndex == self.firstLineIndex:
                 raise StopIteration, "You've reached the end of the line."
             if self.firstLineIndex == None:
@@ -236,6 +244,10 @@ class LineIteratorBackward:
                     self.lineIndex = nextLineIndex
                     return line
             self.lineIndex = nextLineIndex
+
+        if self.isLoop:
+            nextLineIndex = self.getIndexBeforeNextDeactivate()
+
         raise StopIteration, "You've reached the end of the line."
 
     def isBeforeExtrusion(self):
@@ -263,11 +275,14 @@ class LineIteratorForward:
         self.firstLineIndex = None
         self.isLoop = isLoop
         self.lineIndex = lineIndex
-        self.lines = lines
+        if isinstance(lines, Layer):
+            self.lines = [l.raw for l in lines]
+        else:
+            self.lines = lines
 
     def getIndexJustAfterActivate(self):
         "Get index just after the activate command."
-        for lineIndex in xrange(self.lineIndex - 1, 3, - 1):
+        for lineIndex in xrange(self.lineIndex - 1, 0, - 1):
             line = self.lines[lineIndex]
             splitLine = getSplitLineBeforeBracketSemicolon(line)
             firstWord = getFirstWord(splitLine)
@@ -325,6 +340,8 @@ class StretchSkein:
         self.lines = None
         self.oldLocation = None
         self.gcode = None
+        self.current_layer = None
+        self.line_number_in_layer = 0
 
     def getCraftedGcode(self, gcodeText, stretchRepository):
         "Parse gcode text and store the stretch gcode."
@@ -334,8 +351,8 @@ class StretchSkein:
 
         init_done = False
 
-        for layer in self.gcode.all_layers:
-            for line in layer:
+        for self.current_layer_index, self.current_layer in enumerate(self.gcode.all_layers):
+            for self.line_number_in_layer, line in enumerate(self.current_layer):
                 if init_done:
                     self.parseStretch(line.raw)
                 else:
@@ -401,17 +418,17 @@ class StretchSkein:
         self.feedRateMinute = getFeedRateMinute(self.feedRateMinute, splitLine)
         self.oldLocation = location
         if self.extruderActive and self.threadMaximumAbsoluteStretch > 0.0:
-            return self.getStretchedLineFromIndexLocation(self.lineIndex - 1, self.lineIndex + 1, location)
+            return self.getStretchedLineFromIndexLocation(self.line_number_in_layer - 1, self.line_number_in_layer + 1, location)
         if self.isJustBeforeExtrusion() and self.threadMaximumAbsoluteStretch > 0.0:
-            return self.getStretchedLineFromIndexLocation(self.lineIndex - 1, self.lineIndex + 1, location)
+            return self.getStretchedLineFromIndexLocation(self.line_number_in_layer- 1, self.line_number_in_layer + 1, location)
         return self.lines[self.lineIndex]
 
     def getStretchedLineFromIndexLocation(self, indexPreviousStart, indexNextStart, location):
         "Get stretched gcode line from line index and location."
-        crossIteratorForward = LineIteratorForward(self.isLoop, indexNextStart, self.lines)
-        crossIteratorBackward = LineIteratorBackward(self.isLoop, indexPreviousStart, self.lines)
-        iteratorForward = LineIteratorForward(self.isLoop, indexNextStart, self.lines)
-        iteratorBackward = LineIteratorBackward(self.isLoop, indexPreviousStart, self.lines)
+        crossIteratorForward = LineIteratorForward(self.isLoop, indexNextStart, self.current_layer)
+        crossIteratorBackward = LineIteratorBackward(self.isLoop, indexPreviousStart, self.current_layer)
+        iteratorForward = LineIteratorForward(self.isLoop, indexNextStart, self.current_layer)
+        iteratorBackward = LineIteratorBackward(self.isLoop, indexPreviousStart, self.current_layer)
         locationComplex = location.dropAxis()
         relativeStretch = self.getRelativeStretch(locationComplex, iteratorForward) + self.getRelativeStretch(
             locationComplex, iteratorBackward)
@@ -427,15 +444,11 @@ class StretchSkein:
 
     def isJustBeforeExtrusion(self):
         "Determine if activate command is before linear move command."
-        for lineIndex in xrange(self.lineIndex + 1, len(self.lines)):
-            line = self.lines[lineIndex]
-            splitLine = getSplitLineBeforeBracketSemicolon(line)
-            firstWord = getFirstWord(splitLine)
-            if firstWord == 'G1' or firstWord == 'M103':
+        for line in self.current_layer[self.line_number_in_layer+1:]:
+            if line.command == 'G1' or line.command == 'M103':
                 return False
-            if firstWord == 'M101':
+            if line.command == 'M101':
                 return True
-                #		print('This should never happen in isJustBeforeExtrusion in stretch, no activate or deactivate command was found for this thread.')
         return False
 
     def parse_initialisation_line(self, line):

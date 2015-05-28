@@ -59,6 +59,12 @@ class PyLine(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __unicode__(self):
+        return self.raw
+
+    def __str__(self):
+        return self.raw
+
 
 class PyLightLine(object):
     __slots__ = ('raw', 'command')
