@@ -2,7 +2,8 @@ import argparse
 import logging
 import sys
 
-from gcodeutils.stretch.stretch import getCraftedTextFromText
+from gcodeutils.gcoder import GCode
+from gcodeutils.stretch.stretch import SkeinforgeStretchFilter
 
 __author__ = 'olivier'
 
@@ -32,7 +33,13 @@ def main():
 
     logging.basicConfig(format="%(levelname)s:%(message)s")
 
-    args.outfile.write(getCraftedTextFromText(args.infile.read()))
+    # read original GCode
+    gcode = GCode(args.infile.readlines())
+
+    SkeinforgeStretchFilter(**vars(args)).filter(gcode)
+
+    # write back modified gcode
+    gcode.write(args.outfile)
 
 
 if __name__ == "__main__":

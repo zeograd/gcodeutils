@@ -45,7 +45,7 @@ class PyLine(object):
 
     EQ_EPSILON = 1e-5
 
-    def __init__(self, l):
+    def __init__(self, l=None):
         self.raw = l
 
     def __getattr__(self, name):

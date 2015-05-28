@@ -88,12 +88,10 @@ The stretch tool has created the file:
 """
 
 from __future__ import absolute_import
-import copy
 
 import re
 
-from .distanceFeedRate import DistanceFeedRate
-from gcodeutils.gcoder import GCode, split, Line, parse_coordinates
+from gcodeutils.gcoder import split, Line, parse_coordinates, unsplit
 from .vector3 import Vector3
 
 __author__ = 'Enrique Perez (perez_enrique@yahoo.com)'
@@ -113,69 +111,63 @@ def get_location_from_line(old_location, line):
     )
 
 
-def getDotProduct(firstComplex, secondComplex):
-    'Get the dot product of a pair of complexes.'
-    return firstComplex.real * secondComplex.real + firstComplex.imag * secondComplex.imag
-
-
-def getCraftedTextFromText(gcodeText):
-    """Stretch a gcode linear move text."""
-    return GCode(StretchFilter().filter(GCode(gcodeText.split('\n'))).split('\n'))
+def dot_product(lhs, rhs):
+    """Get the dot product of a pair of complexes."""
+    return lhs.real * rhs.real + lhs.imag * rhs.imag
 
 
 class LineIteratorBackward:
-    "Backward line iterator class."
+    """Backward line iterator class."""
 
-    def __init__(self, isLoop, lineIndex, lines):
+    def __init__(self, is_loop, line_index, lines):
         self.firstLineIndex = None
-        self.isLoop = isLoop
-        self.lineIndex = lineIndex
+        self.isLoop = is_loop
+        self.lineIndex = line_index
         # self.lines = [l.raw for l in lines]
         self.lines = lines
 
-    def getIndexBeforeNextDeactivate(self):
-        "Get index two lines before the deactivate command."
+    def get_index_before_next_deactivate(self):
+        """Get index two lines before the deactivate command."""
         for lineIndex in xrange(self.lineIndex + 1, len(self.lines)):
             if self.lines[lineIndex].command == 'M103':
                 return lineIndex - 2
         print('This should never happen in stretch, no deactivate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
 
-    def getNext(self):
-        "Get next line going backward or raise exception."
+    def get_next(self):
+        """Get next line going backward or raise exception."""
 
         if self.lineIndex < 1:
             if self.isLoop:
-                self.lineIndex = self.getIndexBeforeNextDeactivate()
+                self.lineIndex = self.get_index_before_next_deactivate()
 
         while self.lineIndex >= 0:
             if self.lineIndex == self.firstLineIndex:
                 raise StopIteration, "You've reached the end of the line."
-            if self.firstLineIndex == None:
+            if self.firstLineIndex is None:
                 self.firstLineIndex = self.lineIndex
-            nextLineIndex = self.lineIndex - 1
+            next_line_index = self.lineIndex - 1
             line = self.lines[self.lineIndex]
             if line.command == 'M103':
                 if self.isLoop:
-                    nextLineIndex = self.getIndexBeforeNextDeactivate()
+                    next_line_index = self.get_index_before_next_deactivate()
                 else:
                     raise StopIteration, "You've reached the end of the line."
             if line.command == 'G1':
-                if self.isBeforeExtrusion():
+                if self.is_before_extrusion():
                     if self.isLoop:
-                        nextLineIndex = self.getIndexBeforeNextDeactivate()
+                        next_line_index = self.get_index_before_next_deactivate()
                     else:
                         raise StopIteration, "You've reached the end of the line."
                 else:
-                    self.lineIndex = nextLineIndex
-                    print("B: {}".format(line))
+                    self.lineIndex = next_line_index
                     return line
-            self.lineIndex = nextLineIndex
+            self.lineIndex = next_line_index
 
         raise StopIteration, "You've reached the end of the line."
 
-    def isBeforeExtrusion(self):
-        "Determine if index is two or more before activate command."
+    def is_before_extrusion(self):
+        """Determine if index is two or more before activate command."""
         linearMoves = 0
         for lineIndex in xrange(self.lineIndex + 1, len(self.lines)):
             line = self.lines[lineIndex]
@@ -191,18 +183,18 @@ class LineIteratorBackward:
 
 
 class LineIteratorForward(LineIteratorBackward):
-    "Forward line iterator class."
+    """Forward line iterator class."""
 
-    def getIndexJustAfterActivate(self):
-        "Get index just after the activate command."
+    def get_index_just_after_activate(self):
+        """Get index just after the activate command."""
         for lineIndex in xrange(self.lineIndex - 1, 0, - 1):
             if self.lines[lineIndex].command == 'M101':
                 return lineIndex + 1
         print('This should never happen in stretch, no activate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
 
-    def getNext(self):
-        "Get next line or raise exception."
+    def get_next(self):
+        """Get next line or raise exception."""
         while self.lineIndex < len(self.lines):
             if self.lineIndex == self.firstLineIndex:
                 raise StopIteration, "You've reached the end of the line."
@@ -212,21 +204,20 @@ class LineIteratorForward(LineIteratorBackward):
             line = self.lines[self.lineIndex]
             if line.command == 'M103':
                 if self.isLoop:
-                    nextLineIndex = self.getIndexJustAfterActivate()
+                    nextLineIndex = self.get_index_just_after_activate()
                 else:
                     raise StopIteration, "You've reached the end of the line."
             self.lineIndex = nextLineIndex
             if line.command == 'G1':
-                print("F: {}".format(line))
                 return line
         raise StopIteration, "You've reached the end of the line."
 
 
 class StretchRepository:
-    "A class to handle the stretch settings."
+    """A class to handle the stretch settings."""
 
     def __init__(self):
-        "Set the default settings, execute title & settings fileName."
+        """Set the default settings, execute title & settings fileName."""
         self.activateStretch = True  # Activate Stretch
         self.crossLimitDistanceOverEdgeWidth = 5.0  # Cross Limit Distance Over Perimeter Width (ratio)
         self.loopStretchOverEdgeWidth = 0.11  # Loop Stretch Over Perimeter Width (ratio)
@@ -237,12 +228,11 @@ class StretchRepository:
 
 
 class StretchFilter:
-    "A class to stretch a skein of extrusions."
+    """A class to stretch a skein of extrusions."""
 
     EDGE_WIDTH_REGEXP = re.compile(r'\(<edgeWidth> ([\.\d]+)')
 
     def __init__(self, **kwargs):
-        self.distanceFeedRate = DistanceFeedRate()
         self.edgeWidth = 0.4
         self.extruderActive = False
         self.feedRateMinute = 959.0
@@ -259,37 +249,21 @@ class StretchFilter:
         """Parse gcode text and store the stretch gcode."""
         self.gcode = gcode
 
-        # self.stretchRepository = stretchRepository
+        self.setup_filter()
 
-        init_done = False
+        for self.current_layer_index, current_layer in enumerate(self.gcode.all_layers):
+            self.current_layer = current_layer[:]
+            for self.line_number_in_layer, line in enumerate(self.current_layer):
+                result_line = self.parse_line(line)
 
-        # for self.current_layer_index, self.current_layer in enumerate(self.gcode.all_layers):
-        #     for self.line_number_in_layer, line in enumerate(self.current_layer):
+                gcode_line = Line(result_line)
+                parse_coordinates(gcode_line, split(gcode_line))
+                self.gcode.all_layers[self.current_layer_index][self.line_number_in_layer] = gcode_line
 
-        for self.current_layer_index in xrange(0, len(self.gcode.all_layers)):
-            self.current_layer = self.gcode.all_layers[self.current_layer_index][:]
-            for self.line_number_in_layer in xrange(0, len(self.current_layer)):
-                line = self.current_layer[self.line_number_in_layer]
-                if init_done:
-                    result_line = self.parse_line(line)
-                    self.distanceFeedRate.add_line(result_line)
-
-                    gcode_line = Line(result_line)
-                    parse_coordinates(gcode_line, split(gcode_line))
-                    # print("replacing {} by {}".format(self.gcode.all_layers[self.current_layer_index][self.line_number_in_layer], gcode_line))
-                    self.gcode.all_layers[self.current_layer_index][self.line_number_in_layer] = gcode_line
-                    # self.current_layer[self.line_number_in_layer] = gcode_line
-
-                else:
-                    init_done = self.parse_initialisation_line(line)
-                    self.distanceFeedRate.add_line(line.raw)
-
-        return self.distanceFeedRate.output.getvalue()
-
-    def getCrossLimitedStretch(self, crossLimitedStretch, crossLineIterator, locationComplex):
-        "Get cross limited relative stretch for a location."
+    def get_cross_limited_stretch(self, crossLimitedStretch, crossLineIterator, locationComplex):
+        """Get cross limited relative stretch for a location."""
         try:
-            line = crossLineIterator.getNext()
+            line = crossLineIterator.get_next()
         except StopIteration:
             return crossLimitedStretch
         pointComplex = get_location_from_line(self.oldLocation, line).dropAxis()
@@ -298,23 +272,23 @@ class StretchFilter:
         if pointMinusLocationLength <= self.crossLimitDistanceFraction:
             return crossLimitedStretch
         parallelNormal = pointMinusLocation / pointMinusLocationLength
-        parallelStretch = getDotProduct(parallelNormal, crossLimitedStretch) * parallelNormal
+        parallelStretch = dot_product(parallelNormal, crossLimitedStretch) * parallelNormal
         if pointMinusLocationLength > self.crossLimitDistance:
             return parallelStretch
         crossNormal = complex(parallelNormal.imag, - parallelNormal.real)
-        crossStretch = getDotProduct(crossNormal, crossLimitedStretch) * crossNormal
+        crossStretch = dot_product(crossNormal, crossLimitedStretch) * crossNormal
         crossPortion = (self.crossLimitDistance - pointMinusLocationLength) / self.crossLimitDistanceRemainder
         return parallelStretch + crossStretch * crossPortion
 
-    def getRelativeStretch(self, locationComplex, lineIterator):
-        "Get relative stretch for a location."
+    def get_relative_stretch(self, locationComplex, lineIterator):
+        """Get relative stretch for a location."""
         lastLocationComplex = locationComplex
         oldTotalLength = 0.0
         pointComplex = locationComplex
         totalLength = 0.0
         while 1:
             try:
-                line = lineIterator.getNext()
+                line = lineIterator.get_next()
             except StopIteration:
                 locationMinusPoint = locationComplex - pointComplex
                 locationMinusPointLength = abs(locationMinusPoint)
@@ -334,40 +308,48 @@ class StretchFilter:
             oldTotalLength = totalLength
 
     def stretch_line(self, line):
-        "Get stretched gcode line."
+        """Get stretched gcode line."""
         location = get_location_from_line(self.oldLocation, line)
         self.feedRateMinute = line.f or self.feedRateMinute
         self.oldLocation = location
         if self.extruderActive and self.thread_maximum_absolute_stretch > 0.0:
-            return self.getStretchedLineFromIndexLocation(self.line_number_in_layer - 1, self.line_number_in_layer + 1,
+            return self.get_stretched_line_from_index_location(self.line_number_in_layer - 1, self.line_number_in_layer + 1,
                                                           location)
-        if self.isJustBeforeExtrusion() and self.thread_maximum_absolute_stretch > 0.0:
-            return self.getStretchedLineFromIndexLocation(self.line_number_in_layer - 1, self.line_number_in_layer + 1,
+        if self.is_just_before_extrusion() and self.thread_maximum_absolute_stretch > 0.0:
+            return self.get_stretched_line_from_index_location(self.line_number_in_layer - 1, self.line_number_in_layer + 1,
                                                           location)
         return line.raw
 
-    def getStretchedLineFromIndexLocation(self, indexPreviousStart, indexNextStart, location):
-        "Get stretched gcode line from line index and location."
+    def get_stretched_line_from_index_location(self, indexPreviousStart, indexNextStart, location):
+        """Get stretched gcode line from line index and location."""
         crossIteratorForward = LineIteratorForward(self.isLoop, indexNextStart, self.current_layer)
         crossIteratorBackward = LineIteratorBackward(self.isLoop, indexPreviousStart, self.current_layer)
         iteratorForward = LineIteratorForward(self.isLoop, indexNextStart, self.current_layer)
         iteratorBackward = LineIteratorBackward(self.isLoop, indexPreviousStart, self.current_layer)
         locationComplex = location.dropAxis()
-        relativeStretch = self.getRelativeStretch(locationComplex, iteratorForward) + self.getRelativeStretch(
+        relativeStretch = self.get_relative_stretch(locationComplex, iteratorForward) + self.get_relative_stretch(
             locationComplex, iteratorBackward)
         relativeStretch *= 0.8
-        relativeStretch = self.getCrossLimitedStretch(relativeStretch, crossIteratorForward, locationComplex)
-        relativeStretch = self.getCrossLimitedStretch(relativeStretch, crossIteratorBackward, locationComplex)
+        relativeStretch = self.get_cross_limited_stretch(relativeStretch, crossIteratorForward, locationComplex)
+        relativeStretch = self.get_cross_limited_stretch(relativeStretch, crossIteratorBackward, locationComplex)
         relativeStretchLength = abs(relativeStretch)
         if relativeStretchLength > 1.0:
             relativeStretch /= relativeStretchLength
         absoluteStretch = relativeStretch * self.thread_maximum_absolute_stretch
         stretchedPoint = location.dropAxis() + absoluteStretch
-        return self.distanceFeedRate.get_linear_gcode_movement_with_feedrate(self.feedRateMinute, stretchedPoint,
-                                                                             location.z)
 
-    def isJustBeforeExtrusion(self):
-        "Determine if activate command is before linear move command."
+        result = Line()
+        result.command = "G1"
+        result.x = stretchedPoint.real
+        result.y = stretchedPoint.imag
+        result.z = location.z
+        result.f = self.feedRateMinute
+        unsplit(result)
+
+        return result.raw
+
+    def is_just_before_extrusion(self):
+        """Determine if activate command is before linear move command."""
         for line in self.current_layer[self.line_number_in_layer + 1:]:
             if line.command == 'G1' or line.command == 'M103':
                 return False
@@ -375,22 +357,26 @@ class StretchFilter:
                 return True
         return False
 
+    def set_edge_width(self, edge_width):
+        # TODO: make sure that local variable edge_width is purposely different from self.edgeWidth
+        # it is so in the original skeinforge code (where it was called edgeWidth)
+        self.crossLimitDistance = self.edgeWidth * self.stretchRepository.crossLimitDistanceOverEdgeWidth
+        self.loopMaximumAbsoluteStretch = self.edgeWidth * self.stretchRepository.loopStretchOverEdgeWidth
+        self.pathAbsoluteStretch = self.edgeWidth * self.stretchRepository.pathStretchOverEdgeWidth
+        self.edgeInsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeInsideStretchOverEdgeWidth
+        self.edgeOutsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeOutsideStretchOverEdgeWidth
+        self.stretchFromDistance = self.stretchRepository.stretchFromDistanceOverEdgeWidth * edge_width
+        self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
+        self.crossLimitDistanceFraction = self.crossLimitDistance / 3
+        self.crossLimitDistanceRemainder = self.crossLimitDistance - self.crossLimitDistanceFraction
+
     def parse_initialisation_line(self, line):
-        self.distanceFeedRate.search_decimal_places_carried(line.raw)
+        # self.distanceFeedRate.search_decimal_places_carried(line.raw)
         if line.raw == '(</extruderInitialization>)':
             return True
         match = self.EDGE_WIDTH_REGEXP.match(line.raw)
         if match:
-            edgeWidth = float(match.group(1))
-            self.crossLimitDistance = self.edgeWidth * self.stretchRepository.crossLimitDistanceOverEdgeWidth
-            self.loopMaximumAbsoluteStretch = self.edgeWidth * self.stretchRepository.loopStretchOverEdgeWidth
-            self.pathAbsoluteStretch = self.edgeWidth * self.stretchRepository.pathStretchOverEdgeWidth
-            self.edgeInsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeInsideStretchOverEdgeWidth
-            self.edgeOutsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeOutsideStretchOverEdgeWidth
-            self.stretchFromDistance = self.stretchRepository.stretchFromDistanceOverEdgeWidth * edgeWidth
-            self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
-            self.crossLimitDistanceFraction = 0.333333333 * self.crossLimitDistance
-            self.crossLimitDistanceRemainder = self.crossLimitDistance - self.crossLimitDistanceFraction
+            self.set_edge_width(float(match.group(1)))
         return False
 
     def parse_line(self, line):
@@ -439,3 +425,14 @@ class StretchFilter:
 
     def is_edge_end(self, line):
         return line.raw.startswith("(/edge>)")
+
+    def setup_filter(self):
+        raise NotImplementedError
+
+
+class SkeinforgeStretchFilter(StretchFilter):
+    def setup_filter(self):
+        for self.current_layer in self.gcode.all_layers:
+            for line in self.current_layer:
+                if self.parse_initialisation_line(line):
+                    return
