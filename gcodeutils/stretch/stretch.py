@@ -91,7 +91,7 @@ from __future__ import absolute_import
 
 import re
 
-from gcodeutils.gcoder import split, Line, parse_coordinates, unsplit, GCode, linear_move_gcodes
+from gcodeutils.gcoder import split, Line, parse_coordinates, unsplit, linear_move_gcodes
 from .vector3 import Vector3
 
 __author__ = 'Enrique Perez (perez_enrique@yahoo.com)'
@@ -116,71 +116,20 @@ def dot_product(lhs, rhs):
     return lhs.real * rhs.real + lhs.imag * rhs.imag
 
 
-class LineIteratorBackward:
-    """Backward line iterator class."""
+class LineIteratorForward(object):
+    """Forward line iterator class."""
 
     def __init__(self, line_index, lines):
         self.first_visited_index = None
         self.line_index = line_index
         self.first_visited_index = None
         self.lines = lines
+        self.increment = 1
 
-    def get_index_before_next_deactivate(self):
-        """Get index two lines before the deactivate command."""
-        for lineIndex in xrange(self.line_index + 1, len(self.lines)):
-            if StretchFilter.EXTRUSION_OFF_MARKER in self.lines[lineIndex].raw:
-                return lineIndex - 2
-        print('This should never happen in stretch, no deactivate command was found for this thread.')
-        raise StopIteration, "You've reached the end of the line."
+    def index_setup(self):
+        pass
 
-    def get_next(self):
-        """Get next line going backward or raise exception."""
-
-        if self.line_index < 1:
-            self.line_index = self.get_index_before_next_deactivate()
-
-        while self.line_index >= 0:
-
-            if self.line_index == self.first_visited_index:
-                raise StopIteration, "You've reached the end of the line."
-            if self.first_visited_index is None:
-                self.first_visited_index = self.line_index
-
-            next_line_index = self.line_index - 1
-            line = self.lines[self.line_index]
-            if StretchFilter.EXTRUSION_OFF_MARKER in line.raw:
-                next_line_index = self.get_index_before_next_deactivate()
-
-            if line.command in linear_move_gcodes:
-                if self.is_before_extrusion():
-                    next_line_index = self.get_index_before_next_deactivate()
-                else:
-                    self.line_index = next_line_index
-                    return line
-            self.line_index = next_line_index
-
-        raise StopIteration, "You've reached the end of the line."
-
-    def is_before_extrusion(self):
-        """Determine if index is two or more before activate command."""
-        linearMoves = 0
-        for lineIndex in xrange(self.line_index + 1, len(self.lines)):
-            line = self.lines[lineIndex]
-            if line.command in linear_move_gcodes:
-                linearMoves += 1
-            if StretchFilter.EXTRUSION_ON_MARKER in line.raw:
-                return linearMoves > 0
-            if StretchFilter.EXTRUSION_OFF_MARKER in line.raw:
-                return False
-        print(
-            'This should never happen in isBeforeExtrusion in stretch, no activate command was found for this thread.')
-        return False
-
-
-class LineIteratorForward(LineIteratorBackward):
-    """Forward line iterator class."""
-
-    def get_index_just_after_activate(self):
+    def reset_index_on_limit(self):
         """Get index just after the activate command."""
         for lineIndex in xrange(self.line_index - 1, 0, - 1):
             if StretchFilter.EXTRUSION_ON_MARKER in self.lines[lineIndex].raw:
@@ -188,24 +137,54 @@ class LineIteratorForward(LineIteratorBackward):
         print('This should never happen in stretch, no activate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
 
-    def get_next(self):
-        """Get next line or raise exception."""
-        while self.line_index < len(self.lines):
+    def index_in_valid_range(self):
+        return self.line_index < len(self.lines)
 
-            # ensure that we don't get blocked into infinite loop
+    def get_next(self):
+        """Get next line going backward or raise exception."""
+
+        self.index_setup()
+
+        while self.index_in_valid_range():
+
             if self.line_index == self.first_visited_index:
                 raise StopIteration, "You've reached the end of the line."
             if self.first_visited_index is None:
                 self.first_visited_index = self.line_index
 
-            next_line_index = self.line_index + 1
             line = self.lines[self.line_index]
             if StretchFilter.EXTRUSION_OFF_MARKER in line.raw:
-                next_line_index = self.get_index_just_after_activate()
-            self.line_index = next_line_index
+                self.line_index = self.reset_index_on_limit()
+                continue
+
+            self.line_index += self.increment
             if line.command in linear_move_gcodes:
                 return line
+
         raise StopIteration, "You've reached the end of the line."
+
+
+class LineIteratorBackward(LineIteratorForward):
+    """Backward line iterator class."""
+
+    def __init__(self, line_index, lines):
+        super(LineIteratorBackward, self).__init__(line_index, lines)
+        self.increment = -1
+
+    def index_setup(self):
+        if self.line_index < 1:
+            self.line_index = self.reset_index_on_limit()
+
+    def reset_index_on_limit(self):
+        """Get index two lines before the deactivate command."""
+        for lineIndex in xrange(self.line_index + 1, len(self.lines)):
+            if StretchFilter.EXTRUSION_OFF_MARKER in self.lines[lineIndex].raw:
+                return lineIndex - 2
+        print('This should never happen in stretch, no deactivate command was found for this thread.')
+        raise StopIteration, "You've reached the end of the line."
+
+    def index_in_valid_range(self):
+        return self.line_index >= 0
 
 
 class StretchRepository:
@@ -418,6 +397,13 @@ class StretchFilter:
 
     def setup_filter(self):
         raise NotImplementedError
+
+
+class Slic3rStretchFilter(StretchFilter):
+    def setup_filter(self):
+        for self.current_layer in self.gcode.all_layers:
+            for line in self.current_layer:
+                pass
 
 
 class SkeinforgeStretchFilter(StretchFilter):
