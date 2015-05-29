@@ -3,7 +3,7 @@ import logging
 import sys
 
 from gcodeutils.gcoder import GCode
-from gcodeutils.stretch.stretch import SkeinforgeStretchFilter
+from gcodeutils.stretch.stretch import Slic3rStretchFilter
 
 __author__ = 'olivier'
 
@@ -36,7 +36,7 @@ def main():
     # read original GCode
     gcode = GCode(args.infile.readlines())
 
-    SkeinforgeStretchFilter(**vars(args)).filter(gcode)
+    Slic3rStretchFilter(**vars(args)).filter(gcode)
 
     # write back modified gcode
     gcode.write(args.outfile)
