@@ -91,7 +91,7 @@ from __future__ import absolute_import
 
 import re
 
-from gcodeutils.gcoder import split, Line, parse_coordinates, unsplit
+from gcodeutils.gcoder import split, Line, parse_coordinates, unsplit, GCode, linear_move_gcodes
 from .vector3 import Vector3
 
 __author__ = 'Enrique Perez (perez_enrique@yahoo.com)'
@@ -128,7 +128,7 @@ class LineIteratorBackward:
     def get_index_before_next_deactivate(self):
         """Get index two lines before the deactivate command."""
         for lineIndex in xrange(self.line_index + 1, len(self.lines)):
-            if self.lines[lineIndex].command == 'M103':
+            if StretchFilter.EXTRUSION_OFF_MARKER in self.lines[lineIndex].raw:
                 return lineIndex - 2
         print('This should never happen in stretch, no deactivate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
@@ -148,10 +148,10 @@ class LineIteratorBackward:
 
             next_line_index = self.line_index - 1
             line = self.lines[self.line_index]
-            if line.command == 'M103':
+            if StretchFilter.EXTRUSION_OFF_MARKER in line.raw:
                 next_line_index = self.get_index_before_next_deactivate()
 
-            if line.command == 'G1':
+            if line.command in linear_move_gcodes:
                 if self.is_before_extrusion():
                     next_line_index = self.get_index_before_next_deactivate()
                 else:
@@ -166,11 +166,11 @@ class LineIteratorBackward:
         linearMoves = 0
         for lineIndex in xrange(self.line_index + 1, len(self.lines)):
             line = self.lines[lineIndex]
-            if line.command == 'G1':
+            if line.command in linear_move_gcodes:
                 linearMoves += 1
-            if line.command == 'M101':
+            if StretchFilter.EXTRUSION_ON_MARKER in line.raw:
                 return linearMoves > 0
-            if line.command == 'M103':
+            if StretchFilter.EXTRUSION_OFF_MARKER in line.raw:
                 return False
         print(
             'This should never happen in isBeforeExtrusion in stretch, no activate command was found for this thread.')
@@ -183,7 +183,7 @@ class LineIteratorForward(LineIteratorBackward):
     def get_index_just_after_activate(self):
         """Get index just after the activate command."""
         for lineIndex in xrange(self.line_index - 1, 0, - 1):
-            if self.lines[lineIndex].command == 'M101':
+            if StretchFilter.EXTRUSION_ON_MARKER in self.lines[lineIndex].raw:
                 return lineIndex + 1
         print('This should never happen in stretch, no activate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
@@ -200,10 +200,10 @@ class LineIteratorForward(LineIteratorBackward):
 
             next_line_index = self.line_index + 1
             line = self.lines[self.line_index]
-            if line.command == 'M103':
+            if StretchFilter.EXTRUSION_OFF_MARKER in line.raw:
                 next_line_index = self.get_index_just_after_activate()
             self.line_index = next_line_index
-            if line.command == 'G1':
+            if line.command in linear_move_gcodes:
                 return line
         raise StopIteration, "You've reached the end of the line."
 
@@ -224,6 +224,13 @@ class StretchRepository:
 
 class StretchFilter:
     """A class to stretch a skein of extrusions."""
+
+    EXTRUSION_ON_MARKER = 'stretch-extrusion-on'
+    EXTRUSION_OFF_MARKER = 'stretch-extrusion-off'
+    LOOP_START_MARKER = 'stretch-loop-start'
+    INNER_EDGE_START_MARKER = 'stretch-inner-edge-start'
+    OUTER_EDGE_START_MARKER = 'stretch-outer-edge-start'
+    LOOP_STOP_MARKER = 'stretch-loop-stop'
 
     def __init__(self, **kwargs):
         self.edgeWidth = 0.4
@@ -334,7 +341,7 @@ class StretchFilter:
         stretchedPoint = location.dropAxis() + absoluteStretch
 
         result = Line()
-        result.command = "G1"
+        result.command = original_line.command
         result.x = stretchedPoint.real
         result.y = stretchedPoint.imag
         result.z = location.z
@@ -348,9 +355,9 @@ class StretchFilter:
     def is_just_before_extrusion(self):
         """Determine if activate command is before linear move command."""
         for line in self.current_layer[self.line_number_in_layer + 1:]:
-            if line.command == 'G1' or line.command == 'M103':
+            if line.command in linear_move_gcodes or self.EXTRUSION_OFF_MARKER in line.raw:
                 return False
-            if line.command == 'M101':
+            if self.EXTRUSION_ON_MARKER in line.raw:
                 return True
         return False
 
@@ -370,12 +377,12 @@ class StretchFilter:
     def parse_line(self, line):
         """Parse a gcode line and add it to the stretch skein."""
         command = line.command
-        if command == 'G1':
+        if command in linear_move_gcodes:
             stretched_line = self.stretch_line(line)
             return stretched_line
-        elif command == 'M101':
+        elif self.EXTRUSION_ON_MARKER in line.raw:
             self.extruderActive = True
-        elif command == 'M103':
+        elif self.EXTRUSION_OFF_MARKER in line.raw:
             self.extruderActive = False
             self.set_stretch_to_path()
         elif self.is_loop_begin(line):
@@ -389,8 +396,6 @@ class StretchFilter:
         elif self.is_outer_edge_begin(line):
             self.isLoop = True
             self.thread_maximum_absolute_stretch = self.edgeOutsideAbsoluteStretch
-        elif self.is_edge_end(line):
-            self.set_stretch_to_path()
 
         return line
 
@@ -400,19 +405,16 @@ class StretchFilter:
         self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
 
     def is_loop_begin(self, line):
-        return line.raw.startswith("(<loop>")
+        return self.LOOP_START_MARKER in line.raw
 
     def is_loop_end(self, line):
-        return line.raw.startswith("(</loop>)")
+        return self.LOOP_STOP_MARKER in line.raw
 
     def is_inner_edge_begin(self, line):
-        return line.raw.startswith("(<edge>") and not line.raw.startswith("(<edge> outer")
+        return self.INNER_EDGE_START_MARKER in line.raw
 
     def is_outer_edge_begin(self, line):
-        return line.raw.startswith("(<edge> outer")
-
-    def is_edge_end(self, line):
-        return line.raw.startswith("(/edge>)")
+        return self.OUTER_EDGE_START_MARKER in line.raw
 
     def setup_filter(self):
         raise NotImplementedError
@@ -433,5 +435,16 @@ class SkeinforgeStretchFilter(StretchFilter):
     def setup_filter(self):
         for self.current_layer in self.gcode.all_layers:
             for line in self.current_layer:
-                if self.parse_initialisation_line(line):
-                    return
+                self.parse_initialisation_line(line)
+                if line.command == 'M101':
+                    line.raw += '; ' + self.EXTRUSION_ON_MARKER
+                elif line.command == 'M103':
+                    line.raw += '; ' + self.EXTRUSION_OFF_MARKER
+                elif line.raw.startswith("(<loop>"):
+                    line.raw += '; ' + self.LOOP_START_MARKER
+                elif line.raw.startswith("(<edge>") and not line.raw.startswith("(<edge> outer"):
+                    line.raw += '; ' + self.INNER_EDGE_START_MARKER
+                elif line.raw.startswith("(<edge> outer"):
+                    line.raw += '; ' + self.OUTER_EDGE_START_MARKER
+                elif line.raw.startswith("(/edge>)") or line.raw.startswith("(</loop>)"):
+                    line.raw += '; ' + self.LOOP_STOP_MARKER
