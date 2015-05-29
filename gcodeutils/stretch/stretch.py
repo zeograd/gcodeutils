@@ -119,16 +119,15 @@ def dot_product(lhs, rhs):
 class LineIteratorBackward:
     """Backward line iterator class."""
 
-    def __init__(self, is_loop, line_index, lines):
-        self.firstLineIndex = None
-        self.isLoop = is_loop
-        self.lineIndex = line_index
-        # self.lines = [l.raw for l in lines]
+    def __init__(self, line_index, lines):
+        self.first_visited_index = None
+        self.line_index = line_index
+        self.first_visited_index = None
         self.lines = lines
 
     def get_index_before_next_deactivate(self):
         """Get index two lines before the deactivate command."""
-        for lineIndex in xrange(self.lineIndex + 1, len(self.lines)):
+        for lineIndex in xrange(self.line_index + 1, len(self.lines)):
             if self.lines[lineIndex].command == 'M103':
                 return lineIndex - 2
         print('This should never happen in stretch, no deactivate command was found for this thread.')
@@ -137,39 +136,35 @@ class LineIteratorBackward:
     def get_next(self):
         """Get next line going backward or raise exception."""
 
-        if self.lineIndex < 1:
-            if self.isLoop:
-                self.lineIndex = self.get_index_before_next_deactivate()
+        if self.line_index < 1:
+            self.line_index = self.get_index_before_next_deactivate()
 
-        while self.lineIndex >= 0:
-            if self.lineIndex == self.firstLineIndex:
+        while self.line_index >= 0:
+
+            if self.line_index == self.first_visited_index:
                 raise StopIteration, "You've reached the end of the line."
-            if self.firstLineIndex is None:
-                self.firstLineIndex = self.lineIndex
-            next_line_index = self.lineIndex - 1
-            line = self.lines[self.lineIndex]
+            if self.first_visited_index is None:
+                self.first_visited_index = self.line_index
+
+            next_line_index = self.line_index - 1
+            line = self.lines[self.line_index]
             if line.command == 'M103':
-                if self.isLoop:
-                    next_line_index = self.get_index_before_next_deactivate()
-                else:
-                    raise StopIteration, "You've reached the end of the line."
+                next_line_index = self.get_index_before_next_deactivate()
+
             if line.command == 'G1':
                 if self.is_before_extrusion():
-                    if self.isLoop:
-                        next_line_index = self.get_index_before_next_deactivate()
-                    else:
-                        raise StopIteration, "You've reached the end of the line."
+                    next_line_index = self.get_index_before_next_deactivate()
                 else:
-                    self.lineIndex = next_line_index
+                    self.line_index = next_line_index
                     return line
-            self.lineIndex = next_line_index
+            self.line_index = next_line_index
 
         raise StopIteration, "You've reached the end of the line."
 
     def is_before_extrusion(self):
         """Determine if index is two or more before activate command."""
         linearMoves = 0
-        for lineIndex in xrange(self.lineIndex + 1, len(self.lines)):
+        for lineIndex in xrange(self.line_index + 1, len(self.lines)):
             line = self.lines[lineIndex]
             if line.command == 'G1':
                 linearMoves += 1
@@ -187,7 +182,7 @@ class LineIteratorForward(LineIteratorBackward):
 
     def get_index_just_after_activate(self):
         """Get index just after the activate command."""
-        for lineIndex in xrange(self.lineIndex - 1, 0, - 1):
+        for lineIndex in xrange(self.line_index - 1, 0, - 1):
             if self.lines[lineIndex].command == 'M101':
                 return lineIndex + 1
         print('This should never happen in stretch, no activate command was found for this thread.')
@@ -195,19 +190,19 @@ class LineIteratorForward(LineIteratorBackward):
 
     def get_next(self):
         """Get next line or raise exception."""
-        while self.lineIndex < len(self.lines):
-            if self.lineIndex == self.firstLineIndex:
+        while self.line_index < len(self.lines):
+
+            # ensure that we don't get blocked into infinite loop
+            if self.line_index == self.first_visited_index:
                 raise StopIteration, "You've reached the end of the line."
-            if self.firstLineIndex == None:
-                self.firstLineIndex = self.lineIndex
-            nextLineIndex = self.lineIndex + 1
-            line = self.lines[self.lineIndex]
+            if self.first_visited_index is None:
+                self.first_visited_index = self.line_index
+
+            next_line_index = self.line_index + 1
+            line = self.lines[self.line_index]
             if line.command == 'M103':
-                if self.isLoop:
-                    nextLineIndex = self.get_index_just_after_activate()
-                else:
-                    raise StopIteration, "You've reached the end of the line."
-            self.lineIndex = nextLineIndex
+                next_line_index = self.get_index_just_after_activate()
+            self.line_index = next_line_index
             if line.command == 'G1':
                 return line
         raise StopIteration, "You've reached the end of the line."
@@ -229,8 +224,6 @@ class StretchRepository:
 
 class StretchFilter:
     """A class to stretch a skein of extrusions."""
-
-    EDGE_WIDTH_REGEXP = re.compile(r'\(<edgeWidth> ([\.\d]+)')
 
     def __init__(self, **kwargs):
         self.edgeWidth = 0.4
@@ -254,9 +247,7 @@ class StretchFilter:
         for self.current_layer_index, current_layer in enumerate(self.gcode.all_layers):
             self.current_layer = current_layer[:]
             for self.line_number_in_layer, line in enumerate(self.current_layer):
-                result_line = self.parse_line(line)
-
-                gcode_line = Line(result_line)
+                gcode_line = self.parse_line(line)
                 parse_coordinates(gcode_line, split(gcode_line))
                 self.gcode.all_layers[self.current_layer_index][self.line_number_in_layer] = gcode_line
 
@@ -313,19 +304,23 @@ class StretchFilter:
         self.feedRateMinute = line.f or self.feedRateMinute
         self.oldLocation = location
         if self.extruderActive and self.thread_maximum_absolute_stretch > 0.0:
-            return self.get_stretched_line_from_index_location(self.line_number_in_layer - 1, self.line_number_in_layer + 1,
-                                                          location)
+            return self.get_stretched_line_from_index_location(self.line_number_in_layer - 1,
+                                                               self.line_number_in_layer + 1,
+                                                               location,
+                                                               line)
         if self.is_just_before_extrusion() and self.thread_maximum_absolute_stretch > 0.0:
-            return self.get_stretched_line_from_index_location(self.line_number_in_layer - 1, self.line_number_in_layer + 1,
-                                                          location)
-        return line.raw
+            return self.get_stretched_line_from_index_location(self.line_number_in_layer - 1,
+                                                               self.line_number_in_layer + 1,
+                                                               location,
+                                                               line)
+        return line
 
-    def get_stretched_line_from_index_location(self, indexPreviousStart, indexNextStart, location):
+    def get_stretched_line_from_index_location(self, indexPreviousStart, indexNextStart, location, original_line):
         """Get stretched gcode line from line index and location."""
-        crossIteratorForward = LineIteratorForward(self.isLoop, indexNextStart, self.current_layer)
-        crossIteratorBackward = LineIteratorBackward(self.isLoop, indexPreviousStart, self.current_layer)
-        iteratorForward = LineIteratorForward(self.isLoop, indexNextStart, self.current_layer)
-        iteratorBackward = LineIteratorBackward(self.isLoop, indexPreviousStart, self.current_layer)
+        crossIteratorForward = LineIteratorForward(indexNextStart, self.current_layer)
+        crossIteratorBackward = LineIteratorBackward(indexPreviousStart, self.current_layer)
+        iteratorForward = LineIteratorForward(indexNextStart, self.current_layer)
+        iteratorBackward = LineIteratorBackward(indexPreviousStart, self.current_layer)
         locationComplex = location.dropAxis()
         relativeStretch = self.get_relative_stretch(locationComplex, iteratorForward) + self.get_relative_stretch(
             locationComplex, iteratorBackward)
@@ -344,9 +339,11 @@ class StretchFilter:
         result.y = stretchedPoint.imag
         result.z = location.z
         result.f = self.feedRateMinute
+        # TODO
+        result.e = original_line.e
         unsplit(result)
 
-        return result.raw
+        return result
 
     def is_just_before_extrusion(self):
         """Determine if activate command is before linear move command."""
@@ -369,15 +366,6 @@ class StretchFilter:
         self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
         self.crossLimitDistanceFraction = self.crossLimitDistance / 3
         self.crossLimitDistanceRemainder = self.crossLimitDistance - self.crossLimitDistanceFraction
-
-    def parse_initialisation_line(self, line):
-        # self.distanceFeedRate.search_decimal_places_carried(line.raw)
-        if line.raw == '(</extruderInitialization>)':
-            return True
-        match = self.EDGE_WIDTH_REGEXP.match(line.raw)
-        if match:
-            self.set_edge_width(float(match.group(1)))
-        return False
 
     def parse_line(self, line):
         """Parse a gcode line and add it to the stretch skein."""
@@ -404,7 +392,7 @@ class StretchFilter:
         elif self.is_edge_end(line):
             self.set_stretch_to_path()
 
-        return line.raw
+        return line
 
     def set_stretch_to_path(self):
         """Set the thread stretch to path stretch and is loop false."""
@@ -431,6 +419,17 @@ class StretchFilter:
 
 
 class SkeinforgeStretchFilter(StretchFilter):
+    EDGE_WIDTH_REGEXP = re.compile(r'\(<edgeWidth> ([\.\d]+)')
+
+    def parse_initialisation_line(self, line):
+        # self.distanceFeedRate.search_decimal_places_carried(line.raw)
+        if line.raw == '(</extruderInitialization>)':
+            return True
+        match = self.EDGE_WIDTH_REGEXP.match(line.raw)
+        if match:
+            self.set_edge_width(float(match.group(1)))
+        return False
+
     def setup_filter(self):
         for self.current_layer in self.gcode.all_layers:
             for line in self.current_layer:
