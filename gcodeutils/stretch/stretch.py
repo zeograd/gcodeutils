@@ -165,7 +165,7 @@ class LineIteratorForwardLegacy(object):
                 continue
 
             self.line_index += self.increment
-            if line.command in linear_move_gcodes:
+            if line.command in linear_move_gcodes and (line.x is not None or line.y is not None):
                 self.logger.debug("found (%d) %f %f", self.increment, line.x, line.y)
                 return line
 
@@ -197,7 +197,6 @@ class LineIteratorBackwardLegacy(LineIteratorForwardLegacy):
 
 
 class LineIteratorForward(LineIteratorForwardLegacy):
-
     def reset_index_on_limit(self):
         """Get index just after the activate command."""
         self.logger.debug("reset index forward (modern)")
@@ -207,10 +206,12 @@ class LineIteratorForward(LineIteratorForwardLegacy):
         print('This should never happen in stretch, no activate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
 
-class LineIteratorBackward(LineIteratorBackwardLegacy):
 
+class LineIteratorBackward(LineIteratorBackwardLegacy):
     def index_setup(self):
         if self.line_index < 0:
+            self.line_index = self.reset_index_on_limit()
+        elif StretchFilter.LOOP_START_MARKER in self.lines[self.line_index + 1].raw:  # if just before a loop start
             self.line_index = self.reset_index_on_limit()
 
     def reset_index_on_limit(self):
@@ -376,8 +377,11 @@ class StretchFilter:
         result.y = stretchedPoint.imag
         result.z = location.z
         result.f = self.feedRateMinute
-        # TODO
-        result.e = original_line.e
+
+        # TODO improve new extrusion length computation. It's clearly a very rough estimate
+        if original_line.e is not None:
+            result.e = original_line.e * (1 - abs(absoluteStretch) / 2.)
+
         unsplit(result)
 
         logging.debug("stretched point: %f %f", result.x, result.y)
@@ -427,7 +431,7 @@ class StretchFilter:
             self.set_stretch_to_path()
 
         # handle move command if in loop
-        if line.command in linear_move_gcodes and self.isLoop:
+        if line.command in linear_move_gcodes and self.isLoop and (line.x is not None or line.y is not None):
             return self.stretch_line(line)
 
         return line
@@ -462,8 +466,39 @@ class Slic3rStretchFilter(StretchFilter):
 
     def __init__(self, **kwargs):
         StretchFilter.__init__(self, **kwargs)
+
         self.line_forward_iterator = LineIteratorForward
         self.line_backward_iterator = LineIteratorBackward
+
+        self.next_external_perimeter_is_outer = None
+        self.current_type_line = None
+
+    def new_perimeter(self, line, external=False):
+
+        if external:
+            if self.next_external_perimeter_is_outer:
+                logging.debug("found external perimeter outer")
+                line.raw += " ; " + StretchFilter.OUTER_EDGE_START_MARKER
+                self.next_external_perimeter_is_outer = False
+            else:
+                logging.debug("found external perimeter inner")
+                line.raw += " ; " + StretchFilter.INNER_EDGE_START_MARKER
+
+            if self.current_type_line != self.EXTERNAL_PERIMETER:
+                logging.debug("found end of loop")
+                line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+
+            self.current_type_line = self.EXTERNAL_PERIMETER
+
+        else:
+            logging.debug("found extra perimeter")
+            line.raw += " ; " + StretchFilter.LOOP_START_MARKER
+
+            if self.EXTERNAL_PERIMETER == self.current_type_line:
+                logging.debug("found end of loop")
+                line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+
+            self.current_type_line = self.EXTRA_PERIMETER
 
     def setup_filter(self):
 
@@ -471,47 +506,48 @@ class Slic3rStretchFilter(StretchFilter):
         extruding = False
 
         for self.current_layer in self.gcode.all_layers:
-            next_external_perimeter_is_outer = True
-            current_type_line = self.UNKNOWN
+            self.next_external_perimeter_is_outer = True
+            self.current_type_line = self.UNKNOWN
 
-            for line in self.current_layer:
+            for line_idx, line in enumerate(self.current_layer):
+
+                # checking extrusion
+                if not extruding and line.command in linear_move_gcodes and line.e is not None:
+                    extruding = True
+                    line.raw += " ; " + StretchFilter.EXTRUSION_ON_MARKER
+                elif extruding and line.command in linear_move_gcodes and line.e is None and self.current_type_line in (
+                        self.EXTRA_PERIMETER, self.EXTERNAL_PERIMETER):
+                    extruding = False
+                    line.raw += " ; " + StretchFilter.EXTRUSION_OFF_MARKER
 
                 # checking perimeter type
                 if '; perimeter external' in line.raw:
 
-                    if self.EXTRA_PERIMETER == current_type_line:
-                        logging.debug("found end of loop")
-                        line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+                    if self.EXTERNAL_PERIMETER != self.current_type_line:
+                        self.new_perimeter(line, True)
 
-                    if self.EXTERNAL_PERIMETER != current_type_line:
-
-                        if next_external_perimeter_is_outer:
-                            logging.debug("found external perimeter outer")
-                            line.raw += " ; " + StretchFilter.OUTER_EDGE_START_MARKER
-                            next_external_perimeter_is_outer = False
-                        else:
-                            logging.debug("found external perimeter inner")
-                            line.raw += " ; " + StretchFilter.INNER_EDGE_START_MARKER
-
-                    current_type_line = self.EXTERNAL_PERIMETER
                 elif '; perimeter' in line.raw:
 
-                    if self.EXTERNAL_PERIMETER == current_type_line:
+                    if self.EXTRA_PERIMETER != self.current_type_line:
+                        self.new_perimeter(line)
+
+                elif '; move to first perimeter point' in line.raw:
+                    # search if next perimeter is external or not
+                    for loop_ahead_idx in xrange(line_idx + 1, len(self.current_layer)):
+                        if '; perimeter external' in self.current_layer[loop_ahead_idx].raw:
+                            self.new_perimeter(line, True)
+                            break
+                        elif '; perimeter' in self.current_layer[loop_ahead_idx].raw:
+                            self.new_perimeter(line)
+                            break
+
+                elif 'unretract' not in line.raw:
+
+                    if self.current_type_line in (self.EXTRA_PERIMETER, self.EXTERNAL_PERIMETER):
                         logging.debug("found end of loop")
                         line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
 
-                    if self.EXTRA_PERIMETER != current_type_line:
-                        logging.debug("found extra perimeter")
-                        line.raw += " ; " + StretchFilter.LOOP_START_MARKER
-
-                    current_type_line = self.EXTRA_PERIMETER
-                else:
-
-                    if current_type_line in (self.EXTRA_PERIMETER, self.EXTERNAL_PERIMETER):
-                        logging.debug("found end of loop")
-                        line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
-
-                    current_type_line = self.UNKNOWN
+                    self.current_type_line = self.UNKNOWN
 
                 # checking for edge width
                 match = self.EDGE_WIDTH_REGEXP.match(line.raw)
@@ -519,15 +555,7 @@ class Slic3rStretchFilter(StretchFilter):
                     edge_width_found = True
                     self.set_edge_width(float(match.group(1)))
 
-                # checking extrusion
-                if not extruding and line.command in linear_move_gcodes and line.e is not None:
-                    extruding = True
-                    line.raw += " ; " + StretchFilter.EXTRUSION_ON_MARKER
-                elif extruding and line.command in linear_move_gcodes and line.e is None:
-                    extruding = False
-                    line.raw += " ; " + StretchFilter.EXTRUSION_OFF_MARKER
-
-            if current_type_line != self.UNKNOWN:
+            if self.current_type_line != self.UNKNOWN:
                 logging.warn("unfinished loop")
 
         if not edge_width_found:

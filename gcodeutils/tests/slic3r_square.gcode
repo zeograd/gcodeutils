@@ -1,5 +1,6 @@
 ; external perimeters extrusion width = 0.72mm
-G1 X-1 Y0 Z0.6 F960.0 ; perimeter external
+G1 X-1 Y0 Z0.6 F960.0 ; move to first perimeter point
+G1 E1 ; unretract
 G1 X0 Y1 E1 Z0.6 F960.0 ; perimeter external
 G1 X1 Y0 E1 Z0.6 F960.0 ; perimeter external
 G1 X0 Y-1 E1 Z0.6 F960.0 ; perimeter external
