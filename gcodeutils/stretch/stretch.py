@@ -88,6 +88,7 @@ The stretch tool has created the file:
 """
 
 from __future__ import absolute_import
+import logging
 
 import re
 
@@ -116,8 +117,10 @@ def dot_product(lhs, rhs):
     return lhs.real * rhs.real + lhs.imag * rhs.imag
 
 
-class LineIteratorForward(object):
+class LineIteratorForwardLegacy(object):
     """Forward line iterator class."""
+
+    logger = logging.getLogger('iterator')
 
     def __init__(self, line_index, lines):
         self.first_visited_index = None
@@ -126,11 +129,14 @@ class LineIteratorForward(object):
         self.lines = lines
         self.increment = 1
 
+        self.logger.debug("started iterator with line_index = %d", self.line_index)
+
     def index_setup(self):
         pass
 
     def reset_index_on_limit(self):
         """Get index just after the activate command."""
+        self.logger.debug("reset index forward")
         for lineIndex in xrange(self.line_index - 1, 0, - 1):
             if StretchFilter.EXTRUSION_ON_MARKER in self.lines[lineIndex].raw:
                 return lineIndex + 1
@@ -138,7 +144,7 @@ class LineIteratorForward(object):
         raise StopIteration, "You've reached the end of the line."
 
     def index_in_valid_range(self):
-        return self.line_index < len(self.lines)
+        return 0 <= self.line_index < len(self.lines)
 
     def get_next(self):
         """Get next line going backward or raise exception."""
@@ -148,6 +154,7 @@ class LineIteratorForward(object):
         while self.index_in_valid_range():
 
             if self.line_index == self.first_visited_index:
+                self.logger.debug("infinite looping detected")
                 raise StopIteration, "You've reached the end of the line."
             if self.first_visited_index is None:
                 self.first_visited_index = self.line_index
@@ -159,16 +166,18 @@ class LineIteratorForward(object):
 
             self.line_index += self.increment
             if line.command in linear_move_gcodes:
+                self.logger.debug("found (%d) %f %f", self.increment, line.x, line.y)
                 return line
 
+        self.logger.debug("no more point in loop")
         raise StopIteration, "You've reached the end of the line."
 
 
-class LineIteratorBackward(LineIteratorForward):
+class LineIteratorBackwardLegacy(LineIteratorForwardLegacy):
     """Backward line iterator class."""
 
     def __init__(self, line_index, lines):
-        super(LineIteratorBackward, self).__init__(line_index, lines)
+        super(LineIteratorBackwardLegacy, self).__init__(line_index, lines)
         self.increment = -1
 
     def index_setup(self):
@@ -177,14 +186,43 @@ class LineIteratorBackward(LineIteratorForward):
 
     def reset_index_on_limit(self):
         """Get index two lines before the deactivate command."""
+
+        self.logger.debug("reset index backward")
+
         for lineIndex in xrange(self.line_index + 1, len(self.lines)):
             if StretchFilter.EXTRUSION_OFF_MARKER in self.lines[lineIndex].raw:
                 return lineIndex - 2
         print('This should never happen in stretch, no deactivate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
 
-    def index_in_valid_range(self):
-        return self.line_index >= 0
+
+class LineIteratorForward(LineIteratorForwardLegacy):
+
+    def reset_index_on_limit(self):
+        """Get index just after the activate command."""
+        self.logger.debug("reset index forward (modern)")
+        for lineIndex in xrange(self.line_index - 1, -1, - 1):
+            if StretchFilter.LOOP_START_MARKER in self.lines[lineIndex].raw:
+                return lineIndex + 1
+        print('This should never happen in stretch, no activate command was found for this thread.')
+        raise StopIteration, "You've reached the end of the line."
+
+class LineIteratorBackward(LineIteratorBackwardLegacy):
+
+    def index_setup(self):
+        if self.line_index < 0:
+            self.line_index = self.reset_index_on_limit()
+
+    def reset_index_on_limit(self):
+        """Get index two lines before the deactivate command."""
+
+        self.logger.debug("reset index backward (modern)")
+
+        for lineIndex in xrange(self.line_index + 1, len(self.lines)):
+            if StretchFilter.EXTRUSION_OFF_MARKER in self.lines[lineIndex].raw:
+                return lineIndex - 2
+        print('This should never happen in stretch, no deactivate command was found for this thread.')
+        raise StopIteration, "You've reached the end of the line."
 
 
 class StretchRepository:
@@ -207,8 +245,8 @@ class StretchFilter:
     EXTRUSION_ON_MARKER = 'stretch-extrusion-on'
     EXTRUSION_OFF_MARKER = 'stretch-extrusion-off'
     LOOP_START_MARKER = 'stretch-loop-start'
-    INNER_EDGE_START_MARKER = 'stretch-inner-edge-start'
-    OUTER_EDGE_START_MARKER = 'stretch-outer-edge-start'
+    INNER_EDGE_START_MARKER = LOOP_START_MARKER + ' stretch-inner-edge-start'
+    OUTER_EDGE_START_MARKER = LOOP_START_MARKER + ' stretch-outer-edge-start'
     LOOP_STOP_MARKER = 'stretch-loop-stop'
 
     def __init__(self, **kwargs):
@@ -223,6 +261,9 @@ class StretchFilter:
         self.stretchRepository = StretchRepository()
 
         self.thread_maximum_absolute_stretch = 0
+
+        self.line_forward_iterator = LineIteratorForwardLegacy
+        self.line_backward_iterator = LineIteratorBackwardLegacy
 
     def filter(self, gcode):
         """Parse gcode text and store the stretch gcode."""
@@ -276,6 +317,9 @@ class StretchFilter:
             locationMinusPoint = lastLocationComplex - pointComplex
             locationMinusPointLength = abs(locationMinusPoint)
             totalLength += locationMinusPointLength
+
+            logging.debug("total length: %d, stretchFromDistance: %f", totalLength, self.stretchFromDistance)
+
             if totalLength >= self.stretchFromDistance:
                 distanceFromRatio = (self.stretchFromDistance - oldTotalLength) / locationMinusPointLength
                 totalPoint = distanceFromRatio * pointComplex + (1.0 - distanceFromRatio) * lastLocationComplex
@@ -289,12 +333,10 @@ class StretchFilter:
         location = get_location_from_line(self.oldLocation, line)
         self.feedRateMinute = line.f or self.feedRateMinute
         self.oldLocation = location
-        if self.extruderActive and self.thread_maximum_absolute_stretch > 0.0:
-            return self.get_stretched_line_from_index_location(self.line_number_in_layer - 1,
-                                                               self.line_number_in_layer + 1,
-                                                               location,
-                                                               line)
-        if self.is_just_before_extrusion() and self.thread_maximum_absolute_stretch > 0.0:
+
+        # if thread_maximum_absolute_stretch is set (ie within a loop) and we're extruding or after to do so,
+        # adjust the point location to account for stretching
+        if self.thread_maximum_absolute_stretch > 0.0:
             return self.get_stretched_line_from_index_location(self.line_number_in_layer - 1,
                                                                self.line_number_in_layer + 1,
                                                                location,
@@ -303,19 +345,28 @@ class StretchFilter:
 
     def get_stretched_line_from_index_location(self, indexPreviousStart, indexNextStart, location, original_line):
         """Get stretched gcode line from line index and location."""
-        crossIteratorForward = LineIteratorForward(indexNextStart, self.current_layer)
-        crossIteratorBackward = LineIteratorBackward(indexPreviousStart, self.current_layer)
-        iteratorForward = LineIteratorForward(indexNextStart, self.current_layer)
-        iteratorBackward = LineIteratorBackward(indexPreviousStart, self.current_layer)
+        crossIteratorForward = self.line_forward_iterator(indexNextStart, self.current_layer)
+        crossIteratorBackward = self.line_backward_iterator(indexPreviousStart, self.current_layer)
+        iteratorForward = self.line_forward_iterator(indexNextStart, self.current_layer)
+        iteratorBackward = self.line_backward_iterator(indexPreviousStart, self.current_layer)
+
         locationComplex = location.dropAxis()
-        relativeStretch = self.get_relative_stretch(locationComplex, iteratorForward) + self.get_relative_stretch(
-            locationComplex, iteratorBackward)
+
+        logging.debug("original point to stretch: %s", locationComplex)
+
+        relativeStretch = self.get_relative_stretch(locationComplex, iteratorForward) \
+                          + self.get_relative_stretch(locationComplex, iteratorBackward)
         relativeStretch *= 0.8
         relativeStretch = self.get_cross_limited_stretch(relativeStretch, crossIteratorForward, locationComplex)
         relativeStretch = self.get_cross_limited_stretch(relativeStretch, crossIteratorBackward, locationComplex)
+
         relativeStretchLength = abs(relativeStretch)
+
         if relativeStretchLength > 1.0:
             relativeStretch /= relativeStretchLength
+
+        logging.debug("relativeStretchLength: %f", relativeStretchLength)
+
         absoluteStretch = relativeStretch * self.thread_maximum_absolute_stretch
         stretchedPoint = location.dropAxis() + absoluteStretch
 
@@ -328,6 +379,8 @@ class StretchFilter:
         # TODO
         result.e = original_line.e
         unsplit(result)
+
+        logging.debug("stretched point: %f %f", result.x, result.y)
 
         return result
 
@@ -344,37 +397,38 @@ class StretchFilter:
         # TODO: make sure that local variable edge_width is purposely different from self.edgeWidth
         # it is so in the original skeinforge code (where it was called edgeWidth)
         self.crossLimitDistance = self.edgeWidth * self.stretchRepository.crossLimitDistanceOverEdgeWidth
+
         self.loopMaximumAbsoluteStretch = self.edgeWidth * self.stretchRepository.loopStretchOverEdgeWidth
         self.pathAbsoluteStretch = self.edgeWidth * self.stretchRepository.pathStretchOverEdgeWidth
         self.edgeInsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeInsideStretchOverEdgeWidth
         self.edgeOutsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeOutsideStretchOverEdgeWidth
+
         self.stretchFromDistance = self.stretchRepository.stretchFromDistanceOverEdgeWidth * edge_width
         self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
+
         self.crossLimitDistanceFraction = self.crossLimitDistance / 3
         self.crossLimitDistanceRemainder = self.crossLimitDistance - self.crossLimitDistanceFraction
 
     def parse_line(self, line):
         """Parse a gcode line and add it to the stretch skein."""
-        command = line.command
-        if command in linear_move_gcodes:
-            stretched_line = self.stretch_line(line)
-            return stretched_line
-        elif self.EXTRUSION_ON_MARKER in line.raw:
-            self.extruderActive = True
-        elif self.EXTRUSION_OFF_MARKER in line.raw:
-            self.extruderActive = False
-            self.set_stretch_to_path()
-        elif self.is_loop_begin(line):
-            self.isLoop = True
-            self.thread_maximum_absolute_stretch = self.loopMaximumAbsoluteStretch
-        elif self.is_loop_end(line):
-            self.set_stretch_to_path()
-        elif self.is_inner_edge_begin(line):
+
+        # check for loop markers
+        if self.is_inner_edge_begin(line):
             self.isLoop = True
             self.thread_maximum_absolute_stretch = self.edgeInsideAbsoluteStretch
         elif self.is_outer_edge_begin(line):
             self.isLoop = True
             self.thread_maximum_absolute_stretch = self.edgeOutsideAbsoluteStretch
+        elif self.is_loop_begin(line):
+            self.isLoop = True
+            self.thread_maximum_absolute_stretch = self.loopMaximumAbsoluteStretch
+        elif self.is_loop_end(line):
+            self.isLoop = False
+            self.set_stretch_to_path()
+
+        # handle move command if in loop
+        if line.command in linear_move_gcodes and self.isLoop:
+            return self.stretch_line(line)
 
         return line
 
@@ -400,10 +454,85 @@ class StretchFilter:
 
 
 class Slic3rStretchFilter(StretchFilter):
+    UNKNOWN = 0
+    EXTERNAL_PERIMETER = 1
+    EXTRA_PERIMETER = 2
+
+    EDGE_WIDTH_REGEXP = re.compile(r'; external perimeters extrusion width\s+=\s+([\.\d]+)mm')
+
+    def __init__(self, **kwargs):
+        StretchFilter.__init__(self, **kwargs)
+        self.line_forward_iterator = LineIteratorForward
+        self.line_backward_iterator = LineIteratorBackward
+
     def setup_filter(self):
+
+        edge_width_found = False
+        extruding = False
+
         for self.current_layer in self.gcode.all_layers:
+            next_external_perimeter_is_outer = True
+            current_type_line = self.UNKNOWN
+
             for line in self.current_layer:
-                pass
+
+                # checking perimeter type
+                if '; perimeter external' in line.raw:
+
+                    if self.EXTRA_PERIMETER == current_type_line:
+                        logging.debug("found end of loop")
+                        line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+
+                    if self.EXTERNAL_PERIMETER != current_type_line:
+
+                        if next_external_perimeter_is_outer:
+                            logging.debug("found external perimeter outer")
+                            line.raw += " ; " + StretchFilter.OUTER_EDGE_START_MARKER
+                            next_external_perimeter_is_outer = False
+                        else:
+                            logging.debug("found external perimeter inner")
+                            line.raw += " ; " + StretchFilter.INNER_EDGE_START_MARKER
+
+                    current_type_line = self.EXTERNAL_PERIMETER
+                elif '; perimeter' in line.raw:
+
+                    if self.EXTERNAL_PERIMETER == current_type_line:
+                        logging.debug("found end of loop")
+                        line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+
+                    if self.EXTRA_PERIMETER != current_type_line:
+                        logging.debug("found extra perimeter")
+                        line.raw += " ; " + StretchFilter.LOOP_START_MARKER
+
+                    current_type_line = self.EXTRA_PERIMETER
+                else:
+
+                    if current_type_line in (self.EXTRA_PERIMETER, self.EXTERNAL_PERIMETER):
+                        logging.debug("found end of loop")
+                        line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+
+                    current_type_line = self.UNKNOWN
+
+                # checking for edge width
+                match = self.EDGE_WIDTH_REGEXP.match(line.raw)
+                if match:
+                    edge_width_found = True
+                    self.set_edge_width(float(match.group(1)))
+
+                # checking extrusion
+                if not extruding and line.command in linear_move_gcodes and line.e is not None:
+                    extruding = True
+                    line.raw += " ; " + StretchFilter.EXTRUSION_ON_MARKER
+                elif extruding and line.command in linear_move_gcodes and line.e is None:
+                    extruding = False
+                    line.raw += " ; " + StretchFilter.EXTRUSION_OFF_MARKER
+
+            if current_type_line != self.UNKNOWN:
+                logging.warn("unfinished loop")
+
+        if not edge_width_found:
+            logging.warn("no edge width found in comments, picking a default value")
+            self.set_edge_width(0.4)
 
 
 class SkeinforgeStretchFilter(StretchFilter):
@@ -432,5 +561,5 @@ class SkeinforgeStretchFilter(StretchFilter):
                     line.raw += '; ' + self.INNER_EDGE_START_MARKER
                 elif line.raw.startswith("(<edge> outer"):
                     line.raw += '; ' + self.OUTER_EDGE_START_MARKER
-                elif line.raw.startswith("(/edge>)") or line.raw.startswith("(</loop>)"):
+                elif line.raw.startswith("(</edge>)") or line.raw.startswith("(</loop>)"):
                     line.raw += '; ' + self.LOOP_STOP_MARKER
