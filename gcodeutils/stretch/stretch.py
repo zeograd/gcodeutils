@@ -233,10 +233,10 @@ class StretchRepository:
         """Set the default settings, execute title & settings fileName."""
         self.activateStretch = True  # Activate Stretch
         self.crossLimitDistanceOverEdgeWidth = 5.0  # Cross Limit Distance Over Perimeter Width (ratio)
-        self.loopStretchOverEdgeWidth = 0.11  # Loop Stretch Over Perimeter Width (ratio)
+        self.loopStretchOverEdgeWidth = 0.5  # Loop Stretch Over Perimeter Width (ratio)
         self.pathStretchOverEdgeWidth = 0.0  # Path Stretch Over Perimeter Width (ratio)
-        self.edgeInsideStretchOverEdgeWidth = 0.32  # Perimeter Inside Stretch Over Perimeter Width (ratio)
-        self.edgeOutsideStretchOverEdgeWidth = 0.1  # Perimeter Outside Stretch Over Perimeter Width (ratio)
+        self.edgeInsideStretchOverEdgeWidth = 0.5  # Perimeter Inside Stretch Over Perimeter Width (ratio)
+        self.edgeOutsideStretchOverEdgeWidth = 0.5  # Perimeter Outside Stretch Over Perimeter Width (ratio)
         self.stretchFromDistanceOverEdgeWidth = 2.0  # Stretch From Distance Over Perimeter Width (ratio)
 
 
@@ -380,7 +380,7 @@ class StretchFilter:
 
         # TODO improve new extrusion length computation. It's clearly a very rough estimate
         if original_line.e is not None:
-            result.e = original_line.e * (1 - abs(absoluteStretch) / 2.)
+            result.e = original_line.e * (1 - abs(absoluteStretch))
 
         unsplit(result)
 
