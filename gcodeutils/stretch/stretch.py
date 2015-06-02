@@ -398,8 +398,11 @@ class StretchFilter:
         return False
 
     def set_edge_width(self, edge_width):
-        # TODO: make sure that local variable edge_width is purposely different from self.edgeWidth
-        # it is so in the original skeinforge code (where it was called edgeWidth)
+        # In the original code, the edge width found in the GCode was only used to recompute the
+        # stretchFromDistance.
+        # It does seem like either a typo or a hack around a problem I've yet to bump into.
+        # For now, I'll apply the edge width to recompute all distance related variables
+        self.edgeWidth = edge_width
         self.crossLimitDistance = self.edgeWidth * self.stretchRepository.crossLimitDistanceOverEdgeWidth
 
         self.loopMaximumAbsoluteStretch = self.edgeWidth * self.stretchRepository.loopStretchOverEdgeWidth
@@ -407,7 +410,7 @@ class StretchFilter:
         self.edgeInsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeInsideStretchOverEdgeWidth
         self.edgeOutsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeOutsideStretchOverEdgeWidth
 
-        self.stretchFromDistance = self.stretchRepository.stretchFromDistanceOverEdgeWidth * edge_width
+        self.stretchFromDistance = self.stretchRepository.stretchFromDistanceOverEdgeWidth * self.edgeWidth
         self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
 
         self.crossLimitDistanceFraction = self.crossLimitDistance / 3
