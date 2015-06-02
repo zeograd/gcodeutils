@@ -375,7 +375,7 @@ class StretchFilter:
         result.command = original_line.command
         result.x = stretchedPoint.real
         result.y = stretchedPoint.imag
-        result.z = location.z
+        result.z = original_line.z
         result.f = self.feedRateMinute
 
         # TODO improve new extrusion length computation. It's clearly a very rough estimate
