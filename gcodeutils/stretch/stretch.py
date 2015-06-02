@@ -229,15 +229,20 @@ class LineIteratorBackward(LineIteratorBackwardLegacy):
 class StretchRepository:
     """A class to handle the stretch settings."""
 
-    def __init__(self):
-        """Set the default settings, execute title & settings fileName."""
-        self.activateStretch = True  # Activate Stretch
-        self.crossLimitDistanceOverEdgeWidth = 5.0  # Cross Limit Distance Over Perimeter Width (ratio)
-        self.loopStretchOverEdgeWidth = 0.5  # Loop Stretch Over Perimeter Width (ratio)
-        self.pathStretchOverEdgeWidth = 0.0  # Path Stretch Over Perimeter Width (ratio)
-        self.edgeInsideStretchOverEdgeWidth = 0.5  # Perimeter Inside Stretch Over Perimeter Width (ratio)
-        self.edgeOutsideStretchOverEdgeWidth = 0.5  # Perimeter Outside Stretch Over Perimeter Width (ratio)
-        self.stretchFromDistanceOverEdgeWidth = 2.0  # Stretch From Distance Over Perimeter Width (ratio)
+    def __init__(self, cross_limit_distance_over_edge_width=5.0, loop_stretch_over_edge_width=0.11,
+                 edge_inside_stretch_over_edge_width=0.32, edge_outside_stretch_over_edge_width=0.1,
+                 stretch_from_distance_over_edge_width=2.0, stretch_strength=1.0):
+        """Set the default settings."""
+
+        # Cross Limit Distance Over Perimeter Width (ratio)
+        self.crossLimitDistanceOverEdgeWidth = cross_limit_distance_over_edge_width
+
+        self.loopStretchOverEdgeWidth = loop_stretch_over_edge_width * stretch_strength
+        self.edgeInsideStretchOverEdgeWidth = edge_inside_stretch_over_edge_width * stretch_strength
+        self.edgeOutsideStretchOverEdgeWidth = edge_outside_stretch_over_edge_width * stretch_strength
+
+        # Stretch From Distance Over Perimeter Width (ratio)
+        self.stretchFromDistanceOverEdgeWidth = stretch_from_distance_over_edge_width
 
 
 class StretchFilter:
@@ -259,7 +264,7 @@ class StretchFilter:
         self.gcode = None
         self.current_layer = None
         self.line_number_in_layer = 0
-        self.stretchRepository = StretchRepository()
+        self.stretchRepository = StretchRepository(**kwargs)
 
         self.thread_maximum_absolute_stretch = 0
 
@@ -406,12 +411,11 @@ class StretchFilter:
         self.crossLimitDistance = self.edgeWidth * self.stretchRepository.crossLimitDistanceOverEdgeWidth
 
         self.loopMaximumAbsoluteStretch = self.edgeWidth * self.stretchRepository.loopStretchOverEdgeWidth
-        self.pathAbsoluteStretch = self.edgeWidth * self.stretchRepository.pathStretchOverEdgeWidth
         self.edgeInsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeInsideStretchOverEdgeWidth
         self.edgeOutsideAbsoluteStretch = self.edgeWidth * self.stretchRepository.edgeOutsideStretchOverEdgeWidth
 
         self.stretchFromDistance = self.stretchRepository.stretchFromDistanceOverEdgeWidth * self.edgeWidth
-        self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
+        self.thread_maximum_absolute_stretch = 0
 
         self.crossLimitDistanceFraction = self.crossLimitDistance / 3
         self.crossLimitDistanceRemainder = self.crossLimitDistance - self.crossLimitDistanceFraction
@@ -442,7 +446,7 @@ class StretchFilter:
     def set_stretch_to_path(self):
         """Set the thread stretch to path stretch and is loop false."""
         self.isLoop = False
-        self.thread_maximum_absolute_stretch = self.pathAbsoluteStretch
+        self.thread_maximum_absolute_stretch = 0
 
     def is_loop_begin(self, line):
         return self.LOOP_START_MARKER in line.raw
