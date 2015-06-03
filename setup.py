@@ -23,7 +23,7 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.9.5',
+    version='0.9.9',
 
     description='Reprap oriented gcode utilities',
     long_description=long_description,
@@ -44,7 +44,7 @@ setup(
         # 3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
 
         'Environment :: Console',
 
@@ -66,7 +66,7 @@ setup(
     ],
 
     # What does your project relate to?
-    keywords='reprap, gcode, calibration',
+    keywords='reprap, gcode, calibration, stretch, arc compensation',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
