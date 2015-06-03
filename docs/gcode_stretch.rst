@@ -6,7 +6,7 @@ gcode_stretch
 It is a port of skeinforge stretch module, made to work with other modern libre slicers.
 
 .. warning::
-This filter isn't extensively tested yet. Please apply an appropriate amount of scepticism and report both
+    This filter isn't extensively tested yet. Please apply an appropriate amount of scepticism and report both
     failures and successes.
 
 Use case
@@ -18,7 +18,7 @@ accomodate another part of a known size. Typically, you want to be able to fit a
 Due to several reasons, the printed part may end up with a smaller size than expected.
 
 .. note::
-To achieve the right round hole size, when using OpenSCAD, you should use `polyholes <http://hydraraptor.blogspot.fr/2011/02/polyholes.html>`_.
+    To achieve the right round hole size, when using OpenSCAD, you should use `polyholes <http://hydraraptor.blogspot.fr/2011/02/polyholes.html>`_.
 
 If you have no way to improve the original design to increase the hole size (not having access to the source files,
 not having round holes or just feeling very lazy), **gcode_stretch** can help increase it.
