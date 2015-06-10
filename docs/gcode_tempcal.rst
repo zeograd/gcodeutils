@@ -23,6 +23,9 @@ you inspect the print quality to find out which temperature resulted in the best
 **gcode_tempcal** comes with a suitable cuboid model and a script to perform this temperature
 alteration in the gcode produced by your slicer to get you ready to print in a shorter time.
 
+You may also want to use a tower with vertical holes like this one : http://www.thingiverse.com/thing:826019 so
+that you'll both see perimeter appearance and bridge quality depending on the temperature.
+
 Usage
 .....
 
