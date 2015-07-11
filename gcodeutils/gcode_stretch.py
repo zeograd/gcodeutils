@@ -1,6 +1,7 @@
 import argparse
 import logging
 import sys
+from gcodeutils.filter.relative_extrusion import GCodeToRelativeExtrusionFilter
 
 from gcodeutils.gcoder import GCode
 from gcodeutils.stretch.stretch import Slic3rStretchFilter
@@ -56,6 +57,10 @@ def main():
     # read original GCode
     gcode = GCode(args.infile.readlines())
 
+    # First convert to relative extrusion
+    GCodeToRelativeExtrusionFilter().filter(gcode)
+
+    # Then perform the stretching
     Slic3rStretchFilter(**vars(args)).filter(gcode)
 
     # write back modified gcode

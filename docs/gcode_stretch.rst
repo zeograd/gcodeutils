@@ -39,11 +39,10 @@ https://gist.githubusercontent.com/zeograd/fd4fd0d4e67ecb1a463f/raw/c9f49be10590
 There is an open ticket regarding this GCode verbosity. If a solution is found, regular slic3r versions will be compatible
 with **gcode_stretch**.
 
-Once done, you need to set 3 settings to produce compatible GCode :
+Once done, you need to set 2 settings to produce compatible GCode :
 
 * "External perimeters first" (in *Print Settings* > *Layers and perimeters* > *Advanced*)
 * "Verbose G-code" (in *Print Settings* > *Output options* > *Output file*)
-* "Use relative E distances" (in *Printer Settings* > *General* > *Advanced*)
 
 At this point, you can generate GCode and apply **gcode_stretch** manually or you should be able to use **gcode_stretch** as
 post processing script (settable in *Print Settings* > *Output options* > *Post-processing scripts*, but untested).
