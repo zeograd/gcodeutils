@@ -35,6 +35,13 @@ move_gcodes = ["G0", "G1", "G2", "G3"]
 linear_move_gcodes = ["G0", "G1"]
 gcode_possible_arguments = ['x', 'y', 'z', 'e', 'f', 'i', 'j']
 
+GCODE_ABSOLUTE_POSITIONING_COMMAND = 'G90'
+GCODE_RELATIVE_POSITIONING_COMMAND = 'G91'
+GCODE_SET_POSITION_COMMAND = 'G92'
+
+GCODE_ABSOLUTE_EXTRUSION_COMMAND = 'M82'
+GCODE_RELATIVE_EXTRUSION_COMMAND = 'M83'
+
 
 class PyLine(object):
     __slots__ = ('x', 'y', 'z', 'e', 'f', 'i', 'j',
@@ -96,6 +103,7 @@ class PyLightLine(object):
     def __getattr__(self, name):
         return None
 
+
 # TODO: reenable loading of C optimised representation of GCode
 # try:
 # import gcoder_line
@@ -127,6 +135,12 @@ def S(line):
 def P(line):
     return find_specific_code(line, "P")
 
+
+def raw_to_line(raw):
+    """Return a GCode line (parsed, with .command filled) out of a raw string representation of GCode"""
+    temp = Line(raw)
+    split(temp)
+    return temp
 
 def split(line):
     split_raw = gcode_exp.findall(line.raw.lower())
