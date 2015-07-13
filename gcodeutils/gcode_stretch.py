@@ -1,12 +1,21 @@
 import argparse
 import logging
 import sys
-from gcodeutils.filter.relative_extrusion import GCodeToRelativeExtrusionFilter
 
+from gcodeutils.filter.relative_extrusion import GCodeToRelativeExtrusionFilter
 from gcodeutils.gcoder import GCode
-from gcodeutils.stretch.stretch import Slic3rStretchFilter
+from gcodeutils.stretch.stretch import Slic3rStretchFilter, CuraStretchFilter
 
 __author__ = 'olivier'
+
+
+def is_cura_gcode(gcode):
+    """Detect cura generated gcode by looking for the profile string"""
+    for layer in gcode.all_layers:
+        for opcode in layer:
+            if 'CURA_PROFILE_STRING' in opcode.raw:
+                return True
+    return False
 
 
 def main():
@@ -61,7 +70,10 @@ def main():
     GCodeToRelativeExtrusionFilter().filter(gcode)
 
     # Then perform the stretching
-    Slic3rStretchFilter(**vars(args)).filter(gcode)
+    if (is_cura_gcode(gcode)):
+        CuraStretchFilter(**vars(args)).filter(gcode)
+    else:
+        Slic3rStretchFilter(**vars(args)).filter(gcode)
 
     # write back modified gcode
     gcode.write(args.outfile)

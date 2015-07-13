@@ -88,7 +88,9 @@ The stretch tool has created the file:
 """
 
 from __future__ import absolute_import
+import base64
 import logging
+import zlib
 
 import re
 
@@ -231,7 +233,7 @@ class StretchRepository:
 
     def __init__(self, cross_limit_distance_over_edge_width=5.0, loop_stretch_over_edge_width=0.11,
                  edge_inside_stretch_over_edge_width=0.32, edge_outside_stretch_over_edge_width=0.1,
-                 stretch_from_distance_over_edge_width=2.0, stretch_strength=1.0):
+                 stretch_from_distance_over_edge_width=2.0, stretch_strength=1.0, **kwargs):
         """Set the default settings."""
 
         # Cross Limit Distance Over Perimeter Width (ratio)
@@ -568,6 +570,109 @@ class Slic3rStretchFilter(StretchFilter):
         if not edge_width_found:
             logging.warn("no edge width found in comments, picking a default value")
             self.set_edge_width(0.4)
+
+
+class CuraStretchFilter(StretchFilter):
+    UNKNOWN = 0
+    EXTERNAL_PERIMETER = 1
+    EXTRA_PERIMETER = 2
+
+    CURA_PROFILE_REGEXP = re.compile(r';CURA_PROFILE_STRING:(.*)$')
+
+    def __init__(self, **kwargs):
+        StretchFilter.__init__(self, **kwargs)
+
+        self.line_forward_iterator = LineIteratorForward
+        self.line_backward_iterator = LineIteratorBackward
+
+    def new_perimeter(self, line, external=False, outer=False):
+
+        if external:
+            if outer:
+                logging.debug("found external perimeter outer")
+                line.raw += " ; " + StretchFilter.OUTER_EDGE_START_MARKER
+            else:
+                logging.debug("found external perimeter inner")
+                line.raw += " ; " + StretchFilter.INNER_EDGE_START_MARKER
+
+            if self.current_type_line != self.EXTERNAL_PERIMETER:
+                logging.debug("found end of loop")
+                line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+
+            self.current_type_line = self.EXTERNAL_PERIMETER
+
+        else:
+            logging.debug("found extra perimeter")
+            line.raw += " ; " + StretchFilter.LOOP_START_MARKER
+
+            if self.EXTERNAL_PERIMETER == self.current_type_line:
+                logging.debug("found end of loop")
+                line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+
+            self.current_type_line = self.EXTRA_PERIMETER
+
+    def setup_filter(self):
+
+        edge_width_found = False
+        extruding = False
+
+        for self.current_layer in self.gcode.all_layers:
+            self.current_type_line = self.UNKNOWN
+
+            for line_idx, line in enumerate(self.current_layer):
+
+                # checking extrusion
+                if not extruding and line.command in linear_move_gcodes and line.e is not None:
+                    extruding = True
+                    line.raw += " ; " + StretchFilter.EXTRUSION_ON_MARKER
+                elif extruding and line.command in linear_move_gcodes and line.e is None and self.current_type_line in (
+                        self.EXTRA_PERIMETER, self.EXTERNAL_PERIMETER):
+                    extruding = False
+                    line.raw += " ; " + StretchFilter.EXTRUSION_OFF_MARKER
+
+                # checking perimeter type
+                if 'TYPE:WALL-OUTER' in line.raw:
+                    self.new_perimeter(line, True, True)
+
+                elif 'TYPE:WALL-INNER' in line.raw:
+                    self.new_perimeter(line, True)
+
+                elif 'TYPE:SKIN' in line.raw:
+                    self.new_perimeter(line)
+
+                elif 'TYPE:FILL' in line.raw or (line.command in linear_move_gcodes and line.z is not None):
+
+                    if self.current_type_line in (self.EXTRA_PERIMETER, self.EXTERNAL_PERIMETER):
+                        logging.debug("found end of loop")
+                        line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+
+                    self.current_type_line = self.UNKNOWN
+
+                # checking for edge width
+                match = self.CURA_PROFILE_REGEXP.match(line.raw)
+                if match:
+                    edge_width_found = self.parse_cura_profile(match.group(1))
+
+            if self.current_type_line != self.UNKNOWN:
+                logging.warn("unfinished loop")
+
+        if not edge_width_found:
+            logging.warn("no edge width found in comments, picking a default value")
+            self.set_edge_width(0.4)
+
+    def parse_cura_profile(self, cura_profile):
+        profileOpts, alt = zlib.decompress(base64.b64decode(cura_profile)).split('\f', 1)
+        for option in profileOpts.split('\b'):
+            if len(option) > 0:
+                key, value = option.split('=', 1)
+                logging.debug("found cura option %s = %s", key, value)
+
+                if key == 'wall_thickness':
+                    self.set_edge_width(float(value))
+                    return True
+
+
+        return False
 
 
 class SkeinforgeStretchFilter(StretchFilter):
