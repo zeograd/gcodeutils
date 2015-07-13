@@ -1,6 +1,6 @@
 import logging
 
-from gcodeutils.stretch.stretch import SkeinforgeStretchFilter, Slic3rStretchFilter
+from gcodeutils.stretch.stretch import SkeinforgeStretchFilter, Slic3rStretchFilter, CuraStretchFilter
 from gcodeutils.tests import open_gcode_file, gcode_eq
 
 __author__ = 'olivier'
@@ -28,4 +28,12 @@ def test_square_stretch_slic3r():
 
     logging.basicConfig(level=logging.DEBUG)
     Slic3rStretchFilter().filter(simple_square_gcode)
+    simple_square_gcode.write()
+
+
+def test_square_stretch_cura():
+    simple_square_gcode = open_gcode_file('cura_square.gcode')
+
+    logging.basicConfig(level=logging.DEBUG)
+    CuraStretchFilter().filter(simple_square_gcode)
     simple_square_gcode.write()

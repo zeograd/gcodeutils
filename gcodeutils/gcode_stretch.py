@@ -70,7 +70,7 @@ def main():
     GCodeToRelativeExtrusionFilter().filter(gcode)
 
     # Then perform the stretching
-    if (is_cura_gcode(gcode)):
+    if is_cura_gcode(gcode):
         CuraStretchFilter(**vars(args)).filter(gcode)
     else:
         Slic3rStretchFilter(**vars(args)).filter(gcode)

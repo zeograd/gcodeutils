@@ -130,6 +130,7 @@ class LineIteratorForwardLegacy(object):
         self.first_visited_index = None
         self.lines = lines
         self.increment = 1
+        self.stop_on_extrusion_off = True
 
         self.logger.debug("started iterator with line_index = %d", self.line_index)
 
@@ -162,13 +163,13 @@ class LineIteratorForwardLegacy(object):
                 self.first_visited_index = self.line_index
 
             line = self.lines[self.line_index]
-            if StretchFilter.EXTRUSION_OFF_MARKER in line.raw:
+            if StretchFilter.EXTRUSION_OFF_MARKER in line.raw and self.stop_on_extrusion_off:
                 self.line_index = self.reset_index_on_limit()
                 continue
 
             self.line_index += self.increment
             if line.command in linear_move_gcodes and (line.x is not None or line.y is not None):
-                self.logger.debug("found (%d) %f %f", self.increment, line.x, line.y)
+                self.logger.debug("found (%d) %s %s", self.increment, line.x, line.y)
                 return line
 
         self.logger.debug("no more point in loop")
@@ -209,6 +210,25 @@ class LineIteratorForward(LineIteratorForwardLegacy):
         raise StopIteration, "You've reached the end of the line."
 
 
+class CuraLineIteratorForward(LineIteratorForwardLegacy):
+    def __init__(self, line_index, lines):
+        super(CuraLineIteratorForward, self).__init__(line_index, lines)
+        self.stop_on_extrusion_off = False
+
+    def index_setup(self):
+        if StretchFilter.LOOP_STOP_MARKER in self.lines[self.line_index].raw:
+            self.line_index = self.reset_index_on_limit()
+
+    def reset_index_on_limit(self):
+        """Get index just after the activate command."""
+        self.logger.debug("reset index forward (modern)")
+        for lineIndex in xrange(self.line_index - 1, -1, - 1):
+            if StretchFilter.LOOP_START_MARKER in self.lines[lineIndex].raw:
+                return lineIndex
+        print('This should never happen in stretch, no activate command was found for this thread.')
+        raise StopIteration, "You've reached the end of the line."
+
+
 class LineIteratorBackward(LineIteratorBackwardLegacy):
     def index_setup(self):
         if self.line_index < 0:
@@ -224,6 +244,29 @@ class LineIteratorBackward(LineIteratorBackwardLegacy):
         for lineIndex in xrange(self.line_index + 1, len(self.lines)):
             if StretchFilter.EXTRUSION_OFF_MARKER in self.lines[lineIndex].raw:
                 return lineIndex - 2
+        print('This should never happen in stretch, no deactivate command was found for this thread.')
+        raise StopIteration, "You've reached the end of the line."
+
+
+class CuraLineIteratorBackward(LineIteratorBackwardLegacy):
+    def __init__(self, line_index, lines):
+        super(CuraLineIteratorBackward, self).__init__(line_index, lines)
+        self.stop_on_extrusion_off = False
+
+    def index_setup(self):
+        if self.line_index < 0:
+            self.line_index = self.reset_index_on_limit()
+        elif StretchFilter.LOOP_START_MARKER in self.lines[self.line_index + 1].raw:  # if just before a loop start
+            self.line_index = self.reset_index_on_limit()
+
+    def reset_index_on_limit(self):
+        """Get index two lines before the deactivate command."""
+
+        self.logger.debug("reset index backward (modern)")
+
+        for lineIndex in xrange(self.line_index + 1, len(self.lines)):
+            if StretchFilter.LOOP_STOP_MARKER in self.lines[lineIndex].raw:
+                return lineIndex - 1
         print('This should never happen in stretch, no deactivate command was found for this thread.')
         raise StopIteration, "You've reached the end of the line."
 
@@ -582,8 +625,8 @@ class CuraStretchFilter(StretchFilter):
     def __init__(self, **kwargs):
         StretchFilter.__init__(self, **kwargs)
 
-        self.line_forward_iterator = LineIteratorForward
-        self.line_backward_iterator = LineIteratorBackward
+        self.line_forward_iterator = CuraLineIteratorForward
+        self.line_backward_iterator = CuraLineIteratorBackward
 
     def new_perimeter(self, line, external=False, outer=False):
 
@@ -595,7 +638,7 @@ class CuraStretchFilter(StretchFilter):
                 logging.debug("found external perimeter inner")
                 line.raw += " ; " + StretchFilter.INNER_EDGE_START_MARKER
 
-            if self.current_type_line != self.EXTERNAL_PERIMETER:
+            if self.current_type_line != self.UNKNOWN:
                 logging.debug("found end of loop")
                 line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
 
@@ -605,7 +648,7 @@ class CuraStretchFilter(StretchFilter):
             logging.debug("found extra perimeter")
             line.raw += " ; " + StretchFilter.LOOP_START_MARKER
 
-            if self.EXTERNAL_PERIMETER == self.current_type_line:
+            if self.current_type_line != self.UNKNOWN:
                 logging.debug("found end of loop")
                 line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
 
@@ -618,6 +661,7 @@ class CuraStretchFilter(StretchFilter):
 
         for self.current_layer in self.gcode.all_layers:
             self.current_type_line = self.UNKNOWN
+            next_line_marker = None
 
             for line_idx, line in enumerate(self.current_layer):
 
@@ -630,31 +674,34 @@ class CuraStretchFilter(StretchFilter):
                     extruding = False
                     line.raw += " ; " + StretchFilter.EXTRUSION_OFF_MARKER
 
+                if next_line_marker is not None:
+                    self.new_perimeter(line, *next_line_marker)
+                    next_line_marker = None
+
                 # checking perimeter type
                 if 'TYPE:WALL-OUTER' in line.raw:
-                    self.new_perimeter(line, True, True)
+                    self.stop_loop(line)
+                    next_line_marker = (True, True)
 
                 elif 'TYPE:WALL-INNER' in line.raw:
-                    self.new_perimeter(line, True)
+                    self.stop_loop(line)
+                    next_line_marker = (True, False)
 
                 elif 'TYPE:SKIN' in line.raw:
-                    self.new_perimeter(line)
+                    self.stop_loop(line)
+                    next_line_marker = (False, False)
 
-                elif 'TYPE:FILL' in line.raw or (line.command in linear_move_gcodes and line.z is not None):
+                elif 'TYPE:FILL' in line.raw:
+                    self.stop_loop(line)
 
-                    if self.current_type_line in (self.EXTRA_PERIMETER, self.EXTERNAL_PERIMETER):
-                        logging.debug("found end of loop")
-                        line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
-
-                    self.current_type_line = self.UNKNOWN
+                # end loop if we reach the end of the current layer
+                if line_idx == len(self.current_layer) - 1:
+                    self.stop_loop(line)
 
                 # checking for edge width
                 match = self.CURA_PROFILE_REGEXP.match(line.raw)
                 if match:
                     edge_width_found = self.parse_cura_profile(match.group(1))
-
-            if self.current_type_line != self.UNKNOWN:
-                logging.warn("unfinished loop")
 
         if not edge_width_found:
             logging.warn("no edge width found in comments, picking a default value")
@@ -667,12 +714,17 @@ class CuraStretchFilter(StretchFilter):
                 key, value = option.split('=', 1)
                 logging.debug("found cura option %s = %s", key, value)
 
-                if key == 'wall_thickness':
+                if key == 'nozzle_size':
                     self.set_edge_width(float(value))
                     return True
 
-
         return False
+
+    def stop_loop(self, line):
+        if self.current_type_line != self.UNKNOWN:
+            logging.debug("found end of loop")
+            line.raw += " ; " + StretchFilter.LOOP_STOP_MARKER
+        self.current_type_line = self.UNKNOWN
 
 
 class SkeinforgeStretchFilter(StretchFilter):
