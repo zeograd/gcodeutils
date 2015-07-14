@@ -3,7 +3,7 @@ from decimal import Decimal
 from gcodeutils.filter.filter import GCodeFilter
 from gcodeutils.gcoder import GCODE_SET_POSITION_COMMAND, GCODE_RELATIVE_POSITIONING_COMMAND, move_gcodes, split, Line, \
     GCODE_ABSOLUTE_EXTRUSION_COMMAND, \
-    GCODE_RELATIVE_EXTRUSION_COMMAND, raw_to_line
+    GCODE_RELATIVE_EXTRUSION_COMMAND, raw_to_line, unsplit
 
 __author__ = 'olivier'
 
@@ -37,4 +37,5 @@ class GCodeToRelativeExtrusionFilter(GCodeFilter):
             # and keep track of the current e for later reuse
             opcode.e, self.current_extrusion_distance = (
             opcode.e - float(self.current_extrusion_distance), Decimal(opcode.e))
+            unsplit(opcode)
             return opcode

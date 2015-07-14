@@ -24,7 +24,7 @@ def main():
     parser.add_argument('-y', type=float, metavar='amount',
                         help='Move all gcode program by <amount> units in the Y axis.')
 
-    parser.add_argument('-e', help='Convert all extrusion to relative')
+    parser.add_argument('-e', action='count', default=0, help='Convert all extrusion to relative')
 
     parser.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin,
                         help='Program filename to be modified. Defaults to standard input.')
@@ -53,7 +53,7 @@ def main():
     if args.x is not None or args.y is not None:
         GCodeXYTranslateFilter(**vars(args)).filter(gcode)
 
-    if args.e is not None:
+    if args.e:
         GCodeToRelativeExtrusionFilter().filter(gcode)
 
     # write back modified gcode
