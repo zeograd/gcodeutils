@@ -1,3 +1,9 @@
+#Name: Stretch
+#Info: Alter toolpath to partially compensate hole size in the X/Y plane
+#Depend: GCode
+#Type: postprocess
+#Param: stretch_strength(float:1.0) Stretch factor, higher value will give bigger holes
+
 import argparse
 import logging
 import sys
@@ -9,7 +15,7 @@ from gcodeutils.stretch.stretch import Slic3rStretchFilter, CuraStretchFilter
 __author__ = 'olivier'
 
 
-def is_cura_gcode(gcode):
+def is_cura_gcode(gcode):  # pylint: disable=redefined-outer-name
     """Detect cura generated gcode by looking for the profile string"""
     for layer in gcode.all_layers:
         for opcode in layer:
@@ -64,7 +70,7 @@ def main():
     logging.basicConfig(format="%(levelname)s:%(message)s")
 
     # read original GCode
-    gcode = GCode(args.infile.readlines())
+    gcode = GCode(args.infile.readlines())  # pylint: disable=redefined-outer-name
 
     # First convert to relative extrusion
     GCodeToRelativeExtrusionFilter().filter(gcode)
@@ -81,3 +87,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+elif filename:  # pylint: disable=undefined-variable
+    #  we might have been called in cura plugin mode, which predefines variables before importing
+
+    with open(filename, 'r') as gcode_file:  # pylint: disable=undefined-variable
+        gcode = GCode(gcode_file)  # pylint: disable=redefined-outer-name,invalid-name
+
+    GCodeToRelativeExtrusionFilter().filter(gcode)
+    CuraStretchFilter(stretch_strength=stretch_strength).filter(gcode)  # pylint: disable=undefined-variable
+
+    with open(filename, 'w') as gcode_file:  # pylint: disable=undefined-variable
+        gcode.write(gcode_file)
