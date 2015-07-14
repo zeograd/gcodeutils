@@ -33,8 +33,7 @@ Preparation of Slic3r GCode
 ---------------------------
 
 Upstream slic3r doesn't provide any distinction of external and internal perimeters in its GCode.
-As of today, you need to apply the following tiny patch (which doesn't require recompilation) ::
-https://gist.githubusercontent.com/zeograd/fd4fd0d4e67ecb1a463f/raw/c9f49be1059000c73ab907d000de00e2679e5006/external%20perimeter%20verbose%20gcode
+Since the 2 July 2015, slic3r doesn't generate usable comments to distinguish properly all loops type.
 
 There is an open ticket regarding this GCode verbosity. If a solution is found, regular slic3r versions will be compatible
 with **gcode_stretch**.
@@ -47,11 +46,13 @@ Once done, you need to set 2 settings to produce compatible GCode :
 At this point, you can generate GCode and apply **gcode_stretch** manually or you should be able to use **gcode_stretch** as
 post processing script (settable in *Print Settings* > *Output options* > *Post-processing scripts*, but untested).
 
-Preparation with other slicers
-------------------------------
+Preparation of Cura GCode
+-------------------------
 
-There is no support yet for other slicers. Cura is being considered.
+Cura generates usable GCode for stretching by default.
 
+You can either manually postprocess generated GCode or copy the gcode_stretch.py file to your Cura plugins
+directory to enable stretching from within Cura itself.
 
 Command line
 ------------
