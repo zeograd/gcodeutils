@@ -5,7 +5,7 @@ GCodeUtils is a set of utilities to manipulate GCode programs.
 It is targetting RepRap oriented GCode but isn't limited to RepRap.
 
 Currently, it is composed of one calibration generation program, a basic gcode modifier (which translates code along
-X/Y) and a stretcher to increase hole size of printed parts.
+X/Y or convert extrusion distance to relative) and a stretcher to increase hole size of printed parts.
 
 Installation
 ------------
