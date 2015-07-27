@@ -19,7 +19,7 @@ class GCodeTempGradient(object):  # pylint: disable=too-many-instance-attributes
     ABSOLUTE_MIN_TEMPERATURE = 150
     ABSOLUTE_MAX_TEMPERATURE = 250
 
-    def __init__(self, gcode, start_temp, end_temp, min_z_change):
+    def __init__(self, gcode, start_temp, end_temp, min_z_change, **kwargs):
         self.gcode = gcode
         self.start_temp = start_temp
         self.end_temp = end_temp
@@ -57,7 +57,8 @@ class GCodeTempGradient(object):  # pylint: disable=too-many-instance-attributes
 
                 # Keep the lowest Z which is above the minimum height (used to keep the slicer first layers
                 # temperature for adhesion)
-                if self.zmin is None and current_z is not None and current_z > self.min_z_change:
+                if self.zmin is None or (
+                                current_z is not None and self.min_z_change < current_z < self.zmin):
                     self.zmin = current_z
 
         # Make sure that the sliced model is high enough to be usable
@@ -69,8 +70,9 @@ class GCodeTempGradient(object):  # pylint: disable=too-many-instance-attributes
             self.end_temp, self.zmax)
 
         if self.zmin >= self.zmax:
-            raise RuntimeError("Height is too small to create temperature gradient (all operation are below {}mm ?)",
-                               self.min_z_change)
+            raise RuntimeError(
+                "Height is too small to create temperature gradient (all operation are below {}mm ?)".format(
+                    self.min_z_change))
 
     def write(self, output_file=sys.stdout):
         """Write the modified GCode"""
@@ -132,9 +134,11 @@ class GCodeStepTempGradient(GCodeTempGradient):
         self.step_end_temp = self.end_temp + (self.end_temp - self.start_temp) / self.steps
         self.steps += 1
 
+        self.max_temp = max(self.end_temp, self.start_temp)
+
     def get_temp_for_current_layer(self):
-        progress = int(((self.current_z - self.zmin) / (self.zmax - self.zmin)) * self.steps) / self.steps
-        return max(self.end_temp, self.start_temp + progress * (self.step_end_temp - self.start_temp))
+        progress = float(((self.current_z - self.zmin) / (self.zmax - self.zmin)) * self.steps) / self.steps
+        return min(self.max_temp, self.start_temp + progress * (self.step_end_temp - self.start_temp))
 
 
 def main():
