@@ -4,6 +4,12 @@
 #Type: postprocess
 #Param: stretch_strength(float:1.0) Stretch factor, higher value will give bigger holes
 
+# hack for windows platform with a non system wide python so that you can
+# just copy gcodeutils into the plugins directory instead of installing it
+# no twinkles for you, ultimaker
+import sys
+sys.path.append('plugins')
+
 from gcodeutils.filter.relative_extrusion import GCodeToRelativeExtrusionFilter
 from gcodeutils.gcoder import GCode
 from gcodeutils.stretch.stretch import CuraStretchFilter

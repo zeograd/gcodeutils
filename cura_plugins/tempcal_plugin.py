@@ -7,6 +7,12 @@
 #Param: min_z_change(float:3) Minimum Z for changing temperatures
 #Param: steps(float:10) Number of steps
 
+# hack for windows platform with a non system wide python so that you can
+# just copy gcodeutils into the plugins directory instead of installing it
+# no twinkles for you, ultimaker
+import sys
+sys.path.append('plugins')
+
 from gcodeutils.gcode_tempcal import GCodeStepTempGradient
 from gcodeutils.gcoder import GCode
 
