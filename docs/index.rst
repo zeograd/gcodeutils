@@ -15,4 +15,5 @@ GCodeUtils is a collection of scripts to manipulate GCode, usually as filters, a
    gcode_tempcal
    gcode_mod
    gcode_stretch
+   gcode_optimize_arcs
 

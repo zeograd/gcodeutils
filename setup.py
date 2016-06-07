@@ -63,10 +63,11 @@ setup(
         'Programming Language :: Python :: 3.2',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
     ],
 
     # What does your project relate to?
-    keywords='reprap, gcode, calibration, stretch, arc compensation',
+    keywords='reprap, gcode, calibration, stretch, arc compensation, arc optimization, arc conversion',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
@@ -111,7 +112,6 @@ setup(
             'gcode_mod=gcodeutils.gcode_mod:main',
             'gcode_stretch=gcodeutils.gcode_stretch:main',
             'gcode_arc_optimize=gcodeutils.gcode_optimize_arcs:main',
-
         ],
     },
 

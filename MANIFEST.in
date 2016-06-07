@@ -1,4 +1,6 @@
 include README.rst
+include AUTHORS
+include CHANGELOG
 
 # Include the test suite (FIXME: does not work yet)
 # recursive-include tests *

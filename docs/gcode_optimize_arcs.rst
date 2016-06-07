@@ -15,8 +15,6 @@ Usage
 .....
 
 Call **gcode_optimize_arcs** with the GCode either in plain text (or piped) or by giving its filename.
-Depending on the required modification, you have to pass either X and Y amount to translate and/or -e to
-enable relative extrusion.
 
 **gcode_optimize_arcs** attempts to handle relative and absolute moves as well as position setting (G92) but you better
 double check the generated GCode until more feedback have been factored into polishing the translation algorithm.
@@ -28,7 +26,7 @@ controlled by $fn so a good starting point (for small radius) is $fn=64;
     usage: gcode_optimize_arcs [-h] [--inplace] [--verbose] [--quiet]
                      [infile] [outfile]
 
-    Modify gcode program
+    Modify GCode program to account arcs and replace the G1 with G2/G3
 
     positional arguments:
       infile         Program filename to be modified. Defaults to standard input.

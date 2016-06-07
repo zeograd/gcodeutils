@@ -1,0 +1,12 @@
+## [Unreleased]
+### Added
+- added filter and CLI to use gcode arc opcodes when possible (Eyck Jentzsch)
+
+### Changed
+- fixed bug in relative extrusion filter after G92 (Eyck Jentzsch)
+
+## Older versions
+### Added
+- added filter and CLI to stretch gcode to compensante for hole undersizing
+- added filter and CLI to convert absolute extrusion to relative
+- added CLI to generate temperature gradient in existing gcode (for temperature calibration purpose)
