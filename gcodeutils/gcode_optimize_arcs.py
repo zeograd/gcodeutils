@@ -17,7 +17,7 @@ def main():
                         help='Program filename to be modified. Defaults to standard input.')
     parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'), default=sys.stdout,
                         help='Modified program. Defaults to standard output.')
-    parser.add_argument('--inplace', action='count', default=0, help='Modify file inplace')
+    parser.add_argument('--inplace', action='store_true', help='Modify file inplace')
 
     parser.add_argument('--verbose', '-v', action='count', default=1, help='Verbose mode')
     parser.add_argument('--quiet', '-q', action='count', default=0, help='Quiet mode')
@@ -38,13 +38,13 @@ def main():
     gcode = GCode(args.infile.readlines())  # pylint: disable=redefined-outer-name
 
     # First convert to relative extrusion
-    GCodeToRelativeExtrusionFilter().filter(gcode)
+    # GCodeToRelativeExtrusionFilter().filter(gcode)
 
     # Then perform the stretching
     GCodeArcOptimizerFilter().filter(gcode)
 
     # write back modified gcode
-    gcode.write(args.outfile if args.inplace > 0 else args.outfile)
+    gcode.write(args.outfile if args.inplace is True else args.outfile)
 
 
 if __name__ == "__main__":

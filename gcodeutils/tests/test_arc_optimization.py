@@ -11,9 +11,10 @@ import logging
 from gcodeutils.filter.arc_optimizer import GCodeArcOptimizerFilter
 from gcodeutils.tests import open_gcode_file, gcode_eq
 from gcodeutils.gcoder import PyLine
+
 __author__ = 'Eyck Jentzsch <eyck@jepemuc.de>'
 
-PyLine.EQ_EPSILON=1e-4 # write to disc truncates to 4 digits after comma so accuraccy needs to be adapted
+PyLine.EQ_EPSILON=1e-4 # write to disc truncates to 4 digits after comma so accuraccy needs to be adapted for testing
 
 def test_arc_optimization():
     gcode = open_gcode_file('arc_raw.gcode')
@@ -22,7 +23,6 @@ def test_arc_optimization():
     logging.basicConfig(level=logging.DEBUG)
     GCodeArcOptimizerFilter().filter(gcode)
     gcode_eq(gcode_oracle, gcode)
-
 
 if __name__ == "__main__":
     test_arc_optimization()
