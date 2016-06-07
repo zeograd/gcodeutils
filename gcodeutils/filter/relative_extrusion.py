@@ -37,5 +37,6 @@ class GCodeToRelativeExtrusionFilter(GCodeFilter):
             # and keep track of the current e for later reuse
             opcode.e, self.current_extrusion_distance = (
             opcode.e - float(self.current_extrusion_distance), Decimal(opcode.e))
+            opcode.relative_e=True
             unsplit(opcode)
             return opcode
