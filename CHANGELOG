@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.3] - 2016-06-07
 ### Added
 - added filter and CLI to use gcode arc opcodes when possible (Eyck Jentzsch)
 
