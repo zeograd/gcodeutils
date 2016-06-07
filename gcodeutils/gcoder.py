@@ -48,7 +48,7 @@ class PyLine(object):
                  'raw', 'command', 'is_move',
                  'relative', 'relative_e',
                  'current_x', 'current_y', 'current_z', 'extruding',
-                 'current_tool',
+                 'current_tool', 'current_f', 'current_e',
                  'gcview_end_vertex')
 
     EQ_EPSILON = 1e-5
@@ -408,6 +408,7 @@ class GCode(object):
         relative = self.relative
         relative_e = self.relative_e
         current_tool = self.current_tool
+        current_f = self.current_f
         current_x = self.current_x
         current_y = self.current_y
         current_z = self.current_z
@@ -511,7 +512,7 @@ class GCode(object):
                     z = line.z
 
                     if line.f is not None:
-                        self.current_f = line.f
+                        current_f = line.f
 
                     if line.relative:
                         x = current_x + (x or 0)
@@ -546,6 +547,7 @@ class GCode(object):
                 line.current_x = current_x
                 line.current_y = current_y
                 line.current_z = current_z
+                line.current_f=current_f
 
                 # # Process extrusion
                 if line.e is not None:
@@ -562,8 +564,8 @@ class GCode(object):
                         max_e = max(max_e, total_e)
                         cur_layer_has_extrusion |= line.extruding
                     elif line.command == "G92":
-                        offset_e = current_e - line.e
-
+                        offset_e = line.e #current_e - line.e
+                line.current_e = current_e
                 # # Create layers and perform global computations
                 if build_layers:
                     # Update bounding box
@@ -718,6 +720,7 @@ class GCode(object):
         self.relative = relative
         self.relative_e = relative_e
         self.current_tool = current_tool
+        self.current_f = current_f
         self.current_x = current_x
         self.current_y = current_y
         self.current_z = current_z
