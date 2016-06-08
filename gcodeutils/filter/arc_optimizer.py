@@ -175,7 +175,10 @@ class GCodeArcOptimizerFilter(GCodeFilter):
                 extrusions['total']['path'] += path
                 extrusions['filament'][num] = extrusion
                 extrusions['path'][num] = path
-                extrusions['ratio'][num] = extrusions['filament'][num] / path
+                if num == len(self.queue) - 1 and path > 0:
+                    extrusions['ratio'][num] = extrusions['filament'][num] / path
+                else:
+                    extrusions['ratio'][num] = -1
             prev = line
         extrusions['avg']['filament'] = extrusions['total']['filament'] / len(self.queue)
         extrusions['avg']['path'] = extrusions['total']['path'] / len(self.queue)
