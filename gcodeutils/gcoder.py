@@ -166,7 +166,7 @@ def unsplit(line):
     arg = []
     for bit in gcode_possible_arguments:
         if getattr(line, bit) is not None:
-            format += " {}{:.4f}"
+            format += " {}{:.5f}" if bit == 'e' else " {}{:.3f}"
             arg += [bit.upper(), getattr(line, bit)]
     line.raw = line.command + format.format(*arg)
 
