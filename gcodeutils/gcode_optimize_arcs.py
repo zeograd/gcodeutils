@@ -44,7 +44,7 @@ def main():
     GCodeArcOptimizerFilter().filter(gcode)
 
     # write back modified gcode
-    gcode.write(open(args.infile.name, 'w') if args.inplace is True else args.outfile)
+    gcode.write(open(args.infile.name, 'w') if args.inplace is True and args.infile != sys.stdin else args.outfile)
 
 
 if __name__ == "__main__":
