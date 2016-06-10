@@ -23,7 +23,7 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='1.3',
+    version='1.3.1',
 
     description='Reprap oriented gcode utilities',
     long_description=long_description,
@@ -111,7 +111,7 @@ setup(
             'gcode_tempcal=gcodeutils.gcode_tempcal:main',
             'gcode_mod=gcodeutils.gcode_mod:main',
             'gcode_stretch=gcodeutils.gcode_stretch:main',
-            'gcode_arc_optimize=gcodeutils.gcode_optimize_arcs:main',
+            'gcode_optimize_arcs=gcodeutils.gcode_optimize_arcs:main',
         ],
     },
 
