@@ -20,23 +20,33 @@ PyLine.EQ_EPSILON=1e-4 # write to disc truncates to 4 digits after comma so accu
 
 
 def test_arc_optimization_1():
-    gcode1 = open_gcode_file('arc_raw_1.gcode')
-    gcode_ref1 = open_gcode_file('arc_raw_1-ref.gcode')
+    gcode = open_gcode_file('arc_raw_1.gcode')
+    gcode_ref = open_gcode_file('arc_raw_1-ref.gcode')
 
     logging.basicConfig(level=logging.DEBUG)
-    GCodeArcOptimizerFilter().filter(gcode1)
-    gcode_eq(gcode_ref1, gcode1)
+    GCodeArcOptimizerFilter().filter(gcode)
+    gcode_eq(gcode_ref, gcode)
 
 
 def test_arc_optimization_2():
-    gcode2 = open_gcode_file('arc_raw_2.gcode')
-    gcode_ref2 = open_gcode_file('arc_raw_2-ref.gcode')
+    gcode = open_gcode_file('arc_raw_2.gcode')
+    gcode_ref = open_gcode_file('arc_raw_2-ref.gcode')
 
     logging.basicConfig(level=logging.DEBUG)
-    GCodeArcOptimizerFilter().filter(gcode2)
-    gcode_eq(gcode_ref2, gcode2)
+    GCodeArcOptimizerFilter().filter(gcode)
+    gcode_eq(gcode_ref, gcode)
+
+
+def test_arc_optimization_3():
+    gcode = open_gcode_file('arc_raw_3.gcode')
+    gcode_ref = open_gcode_file('arc_raw_3.gcode')
+
+    logging.basicConfig(level=logging.DEBUG)
+    GCodeArcOptimizerFilter().filter(gcode)
+    gcode_eq(gcode_ref, gcode)
 
 
 if __name__ == "__main__":
     test_arc_optimization_1()
     test_arc_optimization_2()
+    test_arc_optimization_3()

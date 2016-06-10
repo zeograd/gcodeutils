@@ -16,6 +16,7 @@ from gcodeutils.gcoder import Line, move_gcodes, unsplit
 __author__ = 'Eyck Jentzsch <eyck@jepemuc.de>'
 
 MIN_SEGMENTS = 8
+MAX_RADIUS = 200              # mm
 ALIGNMENT_ERROR = 0.01        # 10 µm
 PHASE_ERROR = 5*cmath.pi/180  # 5° in radian
 EXTRUSION_ERROR = 0.15        # 15%
@@ -109,6 +110,12 @@ class GCodeArcOptimizerFilter(GCodeFilter):
         """
         return opcode
 
+    def parse_gcode(self, gcode, opcode_filter):
+        for layer in gcode.all_layers:
+            self.parse_layer(layer, opcode_filter)
+        if len(self.queue) > 0:
+            layer += self.queue
+
     def get_circle_least_squares(self):
         """
         get cicle based on least-square error method
@@ -133,15 +140,17 @@ class GCodeArcOptimizerFilter(GCodeFilter):
             svv += pt.y * pt.y
             svvv += pt.y * pt.y * pt.y
             svuu += pt.y * pt.x * pt.x
+        if suu < EPSILON or svv < EPSILON:
+            return None
         v = (((svvv + svuu) / 2) - ((suv / 2) * ((suuu + suvv) / suu))) / (((-(suv * suv)) / suu) + svv)
         u = (((suuu + suvv) / 2) - (v * suv)) / suu
         # calculate direction
         center = Point(x=u + xbar, y=v + ybar)
-        p0 = cmath.phase(complex(self.queue[0].current_x - center.x, self.queue[0].current_y - center.y))
-        p1 = cmath.phase(complex(self.queue[3].current_x - center.x, self.queue[3].current_y - center.y))
+        p0 = complex(self.queue[0].current_x - center.x, self.queue[0].current_y - center.y)
+        p1 = cmath.phase(complex(self.queue[2].current_x - center.x, self.queue[2].current_y - center.y))
         return Circle(radius=sqrt((u * u) + (v * v) + ((suu + svv) / count)),
                       center=center,
-                      direction=GCodeArcOptimizerFilter.phase_diff(p1, p0),
+                      direction=GCodeArcOptimizerFilter.phase_diff(cmath.phase(p1), cmath.phase(p0)),
                       start=Point(self.queue[0].current_x, self.queue[0].current_y),
                       end=Point(self.queue[-1].current_x, self.queue[-1].current_y))
 
@@ -181,6 +190,8 @@ class GCodeArcOptimizerFilter(GCodeFilter):
         :return: a tuple consisting of the bool indication an erroneous circle and the estimated circle
         """
         circle = self.get_circle_least_squares()
+        if circle is None or circle.radius>MAX_RADIUS:
+            return True, circle
         radius_err = self.get_circle_radius_errors(circle)
         if any([error > ALIGNMENT_ERROR for error in radius_err]):
             return True, circle
@@ -281,6 +292,12 @@ class GCodeArcOptimizerFilter(GCodeFilter):
         :param opcode: the opcode
         :return: the resulting opcode or a list of resulting opcodes
         """
+        if opcode.command is None and len(self.queue) > 0:
+            opcode.current_x  =self.queue[-1].current_x
+            opcode.current_y = self.queue[-1].current_y
+            opcode.current_z = self.queue[-1].current_z
+            opcode.current_e = self.queue[-1].current_e
+            opcode.current_f = self.queue[-1].current_f
         self.queue.append(opcode)
         count = len(self.queue)
         if count > MIN_SEGMENTS:
@@ -290,7 +307,7 @@ class GCodeArcOptimizerFilter(GCodeFilter):
                     result = self.to_gcode()
                 else:
                     # flush the queue as we have a GCode resetting the processing
-                    result = self.queue[:]
+                    result = self.queue
                 self.queue = []
                 return result
             else:
@@ -308,11 +325,11 @@ class GCodeArcOptimizerFilter(GCodeFilter):
                     self.valid_circle = True
                     return []
         else:
-            if not self.queue[-1].command in move_gcodes:
+            if self.queue[-1].command in move_gcodes or self.queue[-1].command is None:
+                return []
+            else:
                 # flush the queue as we have a GCode resetting the processing
-                result = self.queue[:]
+                result = self.queue
                 self.queue = []
                 self.valid_circle = False
                 return result
-            else:
-                return []
