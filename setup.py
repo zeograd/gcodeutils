@@ -111,7 +111,7 @@ setup(
             'gcode_tempcal=gcodeutils.gcode_tempcal:main',
             'gcode_mod=gcodeutils.gcode_mod:main',
             'gcode_stretch=gcodeutils.gcode_stretch:main',
-            'gcode_optimize_arc=gcodeutils.gcode_optimize_arcs:main',
+            'gcode_optimize_arcs=gcodeutils.gcode_optimize_arcs:main',
         ],
     },
 
