@@ -147,7 +147,7 @@ class GCodeArcOptimizerFilter(GCodeFilter):
         # calculate direction
         center = Point(x=u + xbar, y=v + ybar)
         p0 = complex(self.queue[0].current_x - center.x, self.queue[0].current_y - center.y)
-        p1 = cmath.phase(complex(self.queue[2].current_x - center.x, self.queue[2].current_y - center.y))
+        p1 = complex(self.queue[2].current_x - center.x, self.queue[2].current_y - center.y)
         return Circle(radius=sqrt((u * u) + (v * v) + ((suu + svv) / count)),
                       center=center,
                       direction=GCodeArcOptimizerFilter.phase_diff(cmath.phase(p1), cmath.phase(p0)),
