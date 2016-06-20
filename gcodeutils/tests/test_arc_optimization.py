@@ -7,18 +7,29 @@
 # along with GCodeUtils.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
-import sys
 
 from gcodeutils.filter.arc_optimizer import GCodeArcOptimizerFilter
-from gcodeutils.tests import open_gcode_file, gcode_eq
 from gcodeutils.gcoder import PyLine
-from gcodeutils.gcoder import GCode
+from gcodeutils.tests import open_gcode_file, gcode_eq
 
 __author__ = 'Eyck Jentzsch <eyck@jepemuc.de>'
 
-PyLine.EQ_EPSILON=1e-4 # write to disc truncates to 4 digits after comma so accuraccy needs to be adapted for testing
 
+def eq_epsilon_context(object):
+    def __call__(self, func):
+        def inner():
+            # write to disc truncates to 4 digits after comma so accuraccy needs to be adapted for testing
+            old_epsilon = PyLine.EQ_EPSILON
+            PyLine.EQ_EPSILON = 1e-4
 
+            try:
+                return func()
+            finally:
+                PyLine.EQ_EPSILON = old_epsilon
+
+        return inner
+
+@eq_epsilon_context
 def test_arc_optimization_1():
     gcode = open_gcode_file('arc_raw_1.gcode')
     gcode_ref = open_gcode_file('arc_ref_1.gcode')
@@ -26,7 +37,7 @@ def test_arc_optimization_1():
     GCodeArcOptimizerFilter().filter(gcode)
     gcode_eq(gcode_ref, gcode)
 
-
+@eq_epsilon_context
 def test_arc_optimization_2():
     gcode = open_gcode_file('arc_raw_2.gcode')
     gcode_ref = open_gcode_file('arc_ref_2.gcode')
@@ -34,7 +45,7 @@ def test_arc_optimization_2():
     GCodeArcOptimizerFilter().filter(gcode)
     gcode_eq(gcode_ref, gcode)
 
-
+@eq_epsilon_context
 def test_arc_optimization_3():
     gcode = open_gcode_file('arc_raw_3.gcode')
     gcode_ref = open_gcode_file('arc_raw_3.gcode')
@@ -42,7 +53,7 @@ def test_arc_optimization_3():
     GCodeArcOptimizerFilter().filter(gcode)
     gcode_eq(gcode_ref, gcode)
 
-
+@eq_epsilon_context
 def test_arc_optimization_4():
     gcode = open_gcode_file('arc_raw_4.gcode')
     gcode_ref = open_gcode_file('arc_ref_4.gcode')

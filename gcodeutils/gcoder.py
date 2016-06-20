@@ -51,7 +51,7 @@ class PyLine(object):
                  'current_tool', 'current_f', 'current_e',
                  'gcview_end_vertex')
 
-    EQ_EPSILON = 1e-5
+    EQ_EPSILON = 1e-3
 
     def __init__(self, l=None):
         self.raw = l
