@@ -34,7 +34,7 @@ controlled by $fn so a good starting point (for small radius) is $fn=64;
 
     optional arguments:
       -h, --help     show this help message and exit
-      --inplace      modify the code in-place, usefull if gcode_optimize_arcs is used as post processor in Slic3r
+      --inplace, -i  modify the code in-place, usefull if gcode_optimize_arcs is used as post processor in Slic3r
       --verbose, -v  Verbose mode
       --quiet, -q    Quiet mode
 

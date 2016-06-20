@@ -7,21 +7,26 @@
 # You should have received a copy of the GNU General Public License
 # along with GCodeUtils.  If not, see <http://www.gnu.org/licenses/>.
 
-# import logging
-from math import sqrt
+import logging
+from math import sqrt, sin
 import cmath
 from gcodeutils.filter.filter import GCodeFilter
 from gcodeutils.gcoder import Line, move_gcodes, unsplit
 
 __author__ = 'Eyck Jentzsch <eyck@jepemuc.de>'
 
-MIN_SEGMENTS = 8
-MAX_RADIUS = 200              # mm
-ALIGNMENT_ERROR = 0.01        # 10 µm
-PHASE_ERROR = 5*cmath.pi/180  # 5° in radian
-EXTRUSION_ERROR = 0.15        # 15%
-EPSILON = 0.000001
+# constraints for the detection algorithm
+MIN_SEGMENTS = 8              # number is segments forming an arc
+MAX_RADIUS = 200              # mm, maximum radius of the detectable circle
+ALIGNMENT_ERROR = 0.015       # 15 µm, max. offset a point might be off of the resulting circle
+PHASE_ERROR = 5*cmath.pi/180  # 5° in radian, max deviation of the angle steps forming a circle
+EXTRUSION_ERROR = 0.15        # 15%, maximum deviation of the extrusion for the segments
+EPSILON = 0.000001            # epsilon for zero comapriosn of float. everything less than will be treated as zero
 
+EXTRUSION_CORRECTION_LIMIT=0.01 # 1%, if the length of all segments deviates more than this from the legnth of the arc
+                                # a correction gcode is generated in absolute coordinate mode
+
+logger = logging.getLogger('arc_optimizer')
 
 class Point(object):
     """
@@ -41,7 +46,7 @@ class Point(object):
         return Point(self.x - other.x, self.y - other.y)
 
     def __str__(self):
-        return "Point(%f, %f)" % self.x, self.y
+        return "Point(%.3f, %.3f)" % (self.x, self.y)
 
     def amplitude(self):
         return sqrt(self.x * self.x + self.y * self.y)
@@ -69,8 +74,8 @@ class Circle(object):
         self.end = end
 
     def __str__(self):
-        return ("CCW" if self.direction > 0.0 else "CW") + "-Cicrle(r=%f, center=%s from %s to %s" % self.radius, self.center.__str__(), \
-               self.start.__str__(), self.end.__str__()
+        circle_str="Arc(r=%.5f, center=%s from %s to %s" % (self.radius, str(self.center), str(self.start), str(self.end))
+        return "CCW-" + circle_str if self.direction > 0.0 else "CW-" + circle_str
 
 
 class GCodeArcOptimizerFilter(GCodeFilter):
@@ -167,6 +172,18 @@ class GCodeArcOptimizerFilter(GCodeFilter):
             errors.append(abs(length - circle.radius))
         return errors
 
+    def get_phase_diffs(self, circle):
+        """
+        get the angle between successive points
+        :param circle:
+        :return:
+        """
+        center = circle.center
+        phases = [cmath.phase(complex(line.current_x - center.x, line.current_y - center.y)) for line in self.queue]
+        phase_diffs = [GCodeArcOptimizerFilter.phase_diff(phases[idx], phases[idx - 1]) for idx in
+                       range(1, len(phases))]
+        return phase_diffs
+
     def get_circle_angle_errors(self, circle):
         """
         calculate the angle errors between 3 consecutive points on the circle
@@ -174,9 +191,7 @@ class GCodeArcOptimizerFilter(GCodeFilter):
         :param circle: the estimated circle
         :return: the list of angle errors
         """
-        center = circle.center
-        phases = [cmath.phase(complex(line.current_x - center.x, line.current_y - center.y)) for line in self.queue]
-        phase_diffs = [GCodeArcOptimizerFilter.phase_diff(phases[idx], phases[idx - 1]) for idx in range(1, len(phases) - 1)]
+        phase_diffs = self.get_phase_diffs(circle)
         phase_diff_avg = sum(phase_diffs) / len(phase_diffs)
         phase_errors = [phase_diff - phase_diff_avg for phase_diff in phase_diffs]
         return phase_errors
@@ -267,24 +282,50 @@ class GCodeArcOptimizerFilter(GCodeFilter):
         translate a sequence of segments into a circular gcode command
         :return: the gcode command
         """
-        first = self.queue[0]
+        result=[self.queue[0]]
         last = self.queue.pop()
         count = len(self.queue)
         end_point = self.queue[-1]
         error, circle = self.get_circle()
         extrusions = self.get_distances()
         op1 = Line()
+        result.append(op1)
         op1.command = "G3" if circle.direction >0 else "G2" # G2 is CW, G3 CCW
         op1.x = round(circle.end.x, 3)
         op1.y = round(circle.end.y, 3)
         op1.i = round(circle.center.x - circle.start.x, 3)
         op1.j = round(circle.center.y - circle.start.y, 3)
-        op1.e = extrusions['total']['filament'] if end_point.relative_e else end_point.e
+        if end_point.relative_e:
+            # calculate extrusion correction
+            # arc length   b = r·alpha (alpha in radian)
+            # chord length s = 2·r·sin(alpha/2)
+            # resulting arc extrusion is s0*b/s
+            op1.e = sum([ s0*(circle.radius*alpha)/(2*circle.radius*sin(alpha/2))
+                  for s0, alpha in zip(extrusions['filament'].values(), self.get_phase_diffs(circle))])
+            op1.relative_e = True
+        else:
+            # absolute mode: fall-back to the original length
+            phase_diffs=self.get_phase_diffs(circle)
+            arc_lens=[ alpha*circle.radius for alpha in phase_diffs]
+            arc_extrusion_length=sum(arc_lens)*extrusions['avg']['ratio']
+            op1.e=self.queue[0].current_e+arc_extrusion_length
+            op1.relative_e=False
+            rel = arc_extrusion_length/extrusions['total']['filament']
+            if (rel - 1) > EXTRUSION_CORRECTION_LIMIT:
+                op2= Line()
+                op2.command="G92"
+                op2.e = op2.current_e = end_point.current_e
+                unsplit(op2)
+                op2.raw += "; generated as arc to path relation is %f" % rel
+                result.append(op2)
         op1.f = end_point.current_f
         unsplit(op1)
         op1.raw += "; generated from %s segments" % (count - 1)
         self.valid_circle = False
-        return first, op1, last
+        result.append(last)
+        logger.info(" generated arc from %s segments" % (count - 1))
+        logger.debug("arc is "+str(circle))
+        return result
 
     def opcode_filter(self, opcode):
         """
@@ -315,10 +356,10 @@ class GCodeArcOptimizerFilter(GCodeFilter):
                 if error:
                     if self.valid_circle:
                         # the last element inserted invalidated the circle
-                        first, circle_gcode, last = self.to_gcode()
+                        result = self.to_gcode()
                         # since last elem was a move keep it in the queue
-                        self.queue = [last]
-                        return [first, circle_gcode]
+                        self.queue = [result.pop()]
+                        return result
                     else:
                         return self.queue.pop(0)
                 else:
