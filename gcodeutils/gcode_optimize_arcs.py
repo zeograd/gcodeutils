@@ -17,7 +17,7 @@ def main():
                         help='Program filename to be modified. Defaults to standard input.')
     parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'), default=sys.stdout,
                         help='Modified program. Defaults to standard output.')
-    parser.add_argument('--inplace', action='store_true', help='Modify file inplace')
+    parser.add_argument('--inplace', '-i', action='store_true', help='Modify file inplace')
 
     parser.add_argument('--verbose', '-v', action='count', default=1, help='Verbose mode')
     parser.add_argument('--quiet', '-q', action='count', default=0, help='Quiet mode')
