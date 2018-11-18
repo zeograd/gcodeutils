@@ -5,6 +5,11 @@ from gcodeutils.stretch.stretch import LineIteratorForwardLegacy, StretchFilter
 
 __author__ = 'olivier'
 
+try:
+    xrange
+except NameError:
+    xrange = range
+
 layer1 = ";" + StretchFilter.EXTRUSION_ON_MARKER + """
 G1 X1
 G1 X2
