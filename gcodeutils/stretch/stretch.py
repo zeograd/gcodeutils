@@ -101,6 +101,11 @@ __author__ = 'Enrique Perez (perez_enrique@yahoo.com)'
 __date__ = '$Date: 2008/21/04 $'
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
 
+try:
+    xrange
+except NameError:
+    xrange = range
+
 
 def get_location_from_line(old_location, line):
     """Get the location from a GCode line, carrying over existing location."""
@@ -144,7 +149,7 @@ class LineIteratorForwardLegacy(object):
             if StretchFilter.EXTRUSION_ON_MARKER in self.lines[lineIndex].raw:
                 return lineIndex + 1
         print('This should never happen in stretch, no activate command was found for this thread.')
-        raise StopIteration, "You've reached the end of the line."
+        raise StopIteration("You've reached the end of the line.")
 
     def index_in_valid_range(self):
         return 0 <= self.line_index < len(self.lines)
@@ -158,7 +163,7 @@ class LineIteratorForwardLegacy(object):
 
             if self.line_index == self.first_visited_index:
                 self.logger.debug("infinite looping detected")
-                raise StopIteration, "You've reached the end of the line."
+                raise StopIteration("You've reached the end of the line.")
             if self.first_visited_index is None:
                 self.first_visited_index = self.line_index
 
@@ -173,7 +178,7 @@ class LineIteratorForwardLegacy(object):
                 return line
 
         self.logger.debug("no more point in loop")
-        raise StopIteration, "You've reached the end of the line."
+        raise StopIteration("You've reached the end of the line.")
 
 
 class LineIteratorBackwardLegacy(LineIteratorForwardLegacy):
@@ -196,7 +201,7 @@ class LineIteratorBackwardLegacy(LineIteratorForwardLegacy):
             if StretchFilter.EXTRUSION_OFF_MARKER in self.lines[lineIndex].raw:
                 return lineIndex - 2
         print('This should never happen in stretch, no deactivate command was found for this thread.')
-        raise StopIteration, "You've reached the end of the line."
+        raise StopIteration("You've reached the end of the line.")
 
 
 class LineIteratorForward(LineIteratorForwardLegacy):
@@ -207,7 +212,7 @@ class LineIteratorForward(LineIteratorForwardLegacy):
             if StretchFilter.LOOP_START_MARKER in self.lines[lineIndex].raw:
                 return lineIndex + 1
         print('This should never happen in stretch, no activate command was found for this thread.')
-        raise StopIteration, "You've reached the end of the line."
+        raise StopIteration("You've reached the end of the line.")
 
 
 class CuraLineIteratorForward(LineIteratorForwardLegacy):
@@ -226,7 +231,7 @@ class CuraLineIteratorForward(LineIteratorForwardLegacy):
             if StretchFilter.LOOP_START_MARKER in self.lines[lineIndex].raw:
                 return lineIndex
         print('This should never happen in stretch, no activate command was found for this thread.')
-        raise StopIteration, "You've reached the end of the line."
+        raise StopIteration("You've reached the end of the line.")
 
 
 class LineIteratorBackward(LineIteratorBackwardLegacy):
@@ -245,7 +250,7 @@ class LineIteratorBackward(LineIteratorBackwardLegacy):
             if StretchFilter.EXTRUSION_OFF_MARKER in self.lines[lineIndex].raw:
                 return lineIndex - 2
         print('This should never happen in stretch, no deactivate command was found for this thread.')
-        raise StopIteration, "You've reached the end of the line."
+        raise StopIteration("You've reached the end of the line.")
 
 
 class CuraLineIteratorBackward(LineIteratorBackwardLegacy):
@@ -268,7 +273,7 @@ class CuraLineIteratorBackward(LineIteratorBackwardLegacy):
             if StretchFilter.LOOP_STOP_MARKER in self.lines[lineIndex].raw:
                 return lineIndex - 1
         print('This should never happen in stretch, no deactivate command was found for this thread.')
-        raise StopIteration, "You've reached the end of the line."
+        raise StopIteration("You've reached the end of the line.")
 
 
 class StretchRepository:

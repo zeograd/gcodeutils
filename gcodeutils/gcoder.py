@@ -805,11 +805,11 @@ class GCode(object):
         # check that generators are empty
         # that's probably more contrived than it should be
         try:
-            l1 = meaningful_lines1.next()
+            l1 = next(meaningful_lines1)
             return "Remaining line(s) for self: '{}'".format(l1)
         except StopIteration:
             try:
-                l2 = meaningful_lines2.next()
+                l2 = next(meaningful_lines2)
                 return "Remaining line(s) for other: '{}'".format(l2)
             except StopIteration:
                 pass
@@ -832,11 +832,11 @@ class GCode(object):
         # check that generators are empty
         # that's probably more contrived than it should be
         try:
-            meaningful_lines1.next()
+            next(meaningful_lines1)
             return False
         except StopIteration:
             try:
-                meaningful_lines2.next()
+                next(meaningful_lines2)
                 return False
             except StopIteration:
                 pass

@@ -13,7 +13,7 @@ from gcodeutils.filter.translate import GCodeXYTranslateFilter
 
 __author__ = 'Olivier Jolly <olivier@pcedev.com>'
 
-from gcoder import GCode  # pylint: disable=relative-import
+from gcodeutils.gcoder import GCode
 
 
 def main():
