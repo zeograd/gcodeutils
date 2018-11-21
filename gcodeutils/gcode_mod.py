@@ -14,7 +14,7 @@ from gcodeutils.filter.translate import GCodeXYTranslateFilter
 from gcodeutils.visit.iterator import GCodeIterator
 from gcodeutils.visit.pause_at_layer import PauseAtLayer
 
-__author__ = 'Olivier Jolly <olivier@pcedev.com>'
+__author__ = 'Olivier Jolly <olivier@pcedev.com>, Joe Friedrichsen <wireddown@users.noreply.github.com>'
 
 from gcodeutils.gcoder import GCode
 
