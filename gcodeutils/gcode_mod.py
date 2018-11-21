@@ -11,7 +11,10 @@ from gcodeutils.filter.relative_extrusion import GCodeToRelativeExtrusionFilter
 
 from gcodeutils.filter.translate import GCodeXYTranslateFilter
 
-__author__ = 'Olivier Jolly <olivier@pcedev.com>'
+from gcodeutils.visit.iterator import GCodeIterator
+from gcodeutils.visit.pause_at_layer import PauseAtLayer
+
+__author__ = 'Olivier Jolly <olivier@pcedev.com>, Joe Friedrichsen <wireddown@users.noreply.github.com>'
 
 from gcodeutils.gcoder import GCode
 
@@ -25,6 +28,9 @@ def main():
                         help='Move all gcode program by <amount> units in the Y axis.')
 
     parser.add_argument('-e', action='count', default=0, help='Convert all extrusion to relative')
+
+    parser.add_argument('-p', type=int, metavar='layer',
+                        help='Pause the gcode program at layer <layer>.')
 
     parser.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin,
                         help='Program filename to be modified. Defaults to standard input.')
@@ -55,6 +61,11 @@ def main():
 
     if args.e:
         GCodeToRelativeExtrusionFilter().filter(gcode)
+
+    iterator = GCodeIterator(gcode)
+    if args.p is not None:
+        visitor = PauseAtLayer([args.p])
+        iterator.accept(visitor)
 
     # write back modified gcode
     gcode.write(args.outfile)
